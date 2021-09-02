@@ -82,3 +82,14 @@ Features / Changes:
 - Security fixes
 - Sample application improvements
 - Misc bug fixes
+
+Version 1.1.0 *(09-2021)*
+---------------------------------
+Features / Changes:
+- 720p video capture (Experimental API)
+- Moderator Controls
+	- Meeting recording
+	- Mute/UnMute Audio/Video of other participants / all participants
+	- Remove a participant from the meeting
+	- End meeting for all immediately or after a certain delay
+- Audio capture dumps (debug facility)
