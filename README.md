@@ -29,7 +29,7 @@ With BlueJeans Android Client SDK, participants can join video conference meetin
 - Remote Video and Content mute
 - Meeting Information (Title, Hostname, URL) property
 
-## New Feature :
+## New Features :
 - 720p video capture (Experimental API)
 - Moderator Controls 
   - Meeting recording
