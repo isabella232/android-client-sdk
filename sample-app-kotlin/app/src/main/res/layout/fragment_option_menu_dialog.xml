@@ -64,9 +64,30 @@
         style="@style/MaterialDropDownButton"
         android:layout_marginBottom="@dimen/_8dp"
         android:hint="@string/video_device"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/horizontalLine"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="@id/tvVideodevice"
         app:layout_constraintTop_toBottomOf="@id/tvVideodevice" />
+
+    <View
+        android:id="@+id/horizontalLine"
+        android:layout_width="match_parent"
+        style="@style/MaterialDropDownButton"
+        android:layout_height="1dp"
+        android:layout_marginTop="5dp"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/mbVideoDevice"
+        app:layout_constraintRight_toRightOf="parent"
+        android:background="@color/black"/>
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:layout_width="wrap_content"
+        android:id="@+id/swClosedCaption"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/horizontalLine"
+        android:text="@string/togglecc"
+        app:layout_constraintRight_toRightOf="parent"
+        android:layout_height="wrap_content">
+    </androidx.appcompat.widget.SwitchCompat>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

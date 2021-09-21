@@ -9,11 +9,22 @@
         android:id="@+id/viewPager"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/tvClosedCaption"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/_56dp"
+        android:gravity="center"
+        android:textColor="@android:color/black"
+        app:layout_constraintBottom_toTopOf="@id/control_panel_container"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent" />
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabLayout"
@@ -45,9 +56,9 @@
         android:id="@+id/tvAppVersion"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/dimen_16"
         android:text="@string/app_version"
         android:textColor="@color/app_version_text"
-        android:layout_marginBottom="@dimen/dimen_16"
         android:textSize="@dimen/dimen_14"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -60,8 +71,8 @@
         android:layout_marginEnd="40dp"
         android:layout_marginBottom="@dimen/dimen_16"
         android:baselineAlignBottom="true"
-        android:scaleType="center"
         android:contentDescription="@string/upload_logs"
+        android:scaleType="center"
         android:src="@drawable/ic_cloud_upload"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintRight_toRightOf="parent" />
@@ -101,9 +112,9 @@
             android:id="@+id/imgRoster"
             android:layout_width="56dp"
             android:layout_height="56dp"
-            android:padding="@dimen/_4dp"
             android:background="@drawable/bg_circle_white_without_boarder"
             android:contentDescription="@string/people"
+            android:padding="@dimen/_4dp"
             android:src="@drawable/people_icon"
             app:layout_constraintBaseline_toBaselineOf="@+id/imgMenuOption"
             app:layout_constraintEnd_toStartOf="@+id/imgScreenShare"
@@ -125,9 +136,9 @@
             android:id="@+id/imgMenuOption"
             android:layout_width="56dp"
             android:layout_height="56dp"
+            android:background="@drawable/bg_circle_white_without_boarder"
             android:contentDescription="@string/more_option"
             android:padding="8dp"
-            android:background="@drawable/bg_circle_white_without_boarder"
             android:src="@drawable/ic_more_option"
             app:layout_constraintBaseline_toBaselineOf="@+id/imgClose"
             app:layout_constraintEnd_toStartOf="@+id/imgClose"
@@ -156,7 +167,7 @@
             app:layout_constraintBottom_toBottomOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <FrameLayout
+    <androidx.fragment.app.FragmentContainerView
         android:id="@+id/rosterContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

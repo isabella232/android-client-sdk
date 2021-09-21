@@ -4,7 +4,6 @@
 package com.bluejeans.android.sdksample
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Rect
@@ -27,6 +26,7 @@ import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.viewpager2.widget.ViewPager2
@@ -43,10 +43,7 @@ import com.bluejeans.android.sdksample.viewpager.ScreenSlidePagerAdapter
 import com.bluejeans.bluejeanssdk.devices.AudioDevice
 import com.bluejeans.bluejeanssdk.devices.VideoDevice
 import com.bluejeans.bluejeanssdk.logging.LoggingService
-import com.bluejeans.bluejeanssdk.meeting.ContentShareAvailability
-import com.bluejeans.bluejeanssdk.meeting.ContentShareEvent
-import com.bluejeans.bluejeanssdk.meeting.ContentShareState
-import com.bluejeans.bluejeanssdk.meeting.MeetingService
+import com.bluejeans.bluejeanssdk.meeting.*
 import com.bluejeans.bluejeanssdk.permission.PermissionService
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
@@ -63,7 +60,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     private val loggingService = SampleApplication.blueJeansSDK.loggingService
     private val appVersionString = "v" + SampleApplication.blueJeansSDK.version
     private val disposable = CompositeDisposable()
-    private lateinit var videoState: MeetingService.VideoState
+    private var videoState: MeetingService.VideoState? = null
 
     private var bottomSheetFragment: MenuFragment? = null
     private var participantListFragment: ParticipantListFragment? = null
@@ -251,6 +248,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         subscribeForContentShareState()
         subscribeForContentShareAvailability()
         subscribeForContentShareEvents()
+        subscribeForClosedCaptionText()
+        subscribeForClosedCaptionState()
     }
 
     private fun checkCameraPermissionAndStartSelfVideo() {
@@ -501,7 +500,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun subscribeForParticipants() {
-        disposable.add(meetingService.participantsService.participants.subscribe(
+        disposable.add(meetingService.participantsService.participants.subscribeOnUI(
             {
                 participantListFragment?.updateMeetingList(it)
             }
@@ -586,6 +585,31 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             })
     }
 
+    private fun subscribeForClosedCaptionText() {
+        disposable.add(meetingService.closedCaptioningService.closedCaptionText.subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({
+                binding.tvClosedCaption.text = it
+            }, {
+                Log.e(TAG,"Error closed caption subscription $it")
+            }))
+    }
+
+    private fun subscribeForClosedCaptionState() {
+        disposable.add(
+            meetingService.closedCaptioningService.closedCaptioningState
+                .subscribeOnUI({
+                    if (it == ClosedCaptioningService.ClosedCaptioningState.Started) {
+                        bottomSheetFragment?.updateClosedCaptionSwitchState(true)
+                        binding.tvClosedCaption.visible()
+                    } else {
+                        bottomSheetFragment?.updateClosedCaptionSwitchState(false)
+                        binding.tvClosedCaption.gone()
+                    }
+                }, { Log.e(TAG, "Exception in subscribeForClosedCaptionState ${it.message}") })
+        )
+    }
+
     private fun initViews() {
         val pagerAdapter = ScreenSlidePagerAdapter(this)
         binding.viewPager.adapter = pagerAdapter
@@ -644,6 +668,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         binding.imgRoster.visible()
         binding.controlPanelContainer.setBackgroundResource(R.drawable.meeting_controls_panel_bg)
         binding.imgUploadLogs.gone()
+        binding.tvClosedCaption.visible()
     }
 
     private fun showOutOfMeetingView() {
@@ -660,6 +685,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         binding.imgScreenShare.gone()
         binding.controlPanelContainer.setBackgroundResource(0)
         binding.imgUploadLogs.visible()
+        binding.tvClosedCaption.gone()
+        binding.tvClosedCaption.text = null
         if (bottomSheetFragment?.isAdded == true) with(bottomSheetFragment) { this?.dismiss() }
         if (participantListFragment?.isAdded == true) {
             supportFragmentManager.beginTransaction().remove(participantListFragment!!).commit()
@@ -773,6 +800,16 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
         override fun showVideoDeviceView() {
             showVideoDeviceDialog()
+        }
+
+        override fun handleClosedCaptionSwitchEvent(isChecked: Boolean) {
+            if (isChecked) {
+                meetingService.closedCaptioningService.startClosedCaptioning()
+                binding.tvClosedCaption.visible()
+            } else {
+                meetingService.closedCaptioningService.stopClosedCaptioning()
+                binding.tvClosedCaption.gone()
+            }
         }
     }
 
@@ -963,6 +1000,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         override fun onStopTrackingTouch(seekBar: SeekBar?) {
         }
     }
+
 
     /** Detects, characterizes, and connects to a CameraDevice (used for all camera operations) */
     private val cameraManager: CameraManager by lazy {

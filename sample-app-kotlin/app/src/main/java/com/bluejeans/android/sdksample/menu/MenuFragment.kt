@@ -7,6 +7,9 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import com.bjnclientcore.ui.util.extensions.gone
+import com.bjnclientcore.ui.util.extensions.visible
+import com.bluejeans.android.sdksample.SampleApplication
 import com.bluejeans.android.sdksample.databinding.FragmentOptionMenuDialogBinding
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
@@ -16,6 +19,7 @@ class MenuFragment(private val menuCallBack: IMenuCallback) : BottomSheetDialogF
     private var videoLayout = ""
     private var currentAudioDevice = ""
     private var currentVideoDevice = ""
+    private var closedCaptionState =  false
     private var menuFragmentBinding: FragmentOptionMenuDialogBinding? = null
     private var bottomSheetBehavior: BottomSheetBehavior<View>? = null
 
@@ -23,6 +27,7 @@ class MenuFragment(private val menuCallBack: IMenuCallback) : BottomSheetDialogF
         fun showVideoLayoutView(videoLayoutName: String)
         fun showAudioDeviceView()
         fun showVideoDeviceView()
+        fun handleClosedCaptionSwitchEvent(isChecked: Boolean)
     }
 
     override fun onStart() {
@@ -62,6 +67,10 @@ class MenuFragment(private val menuCallBack: IMenuCallback) : BottomSheetDialogF
         updateView()
     }
 
+    fun updateClosedCaptionSwitchState(isClosedCaptionActive: Boolean) {
+        closedCaptionState = isClosedCaptionActive
+    }
+
     private fun initViews() {
         menuFragmentBinding?.mbVideoLayout?.setOnClickListener {
             menuCallBack.showVideoLayoutView(menuFragmentBinding!!.mbVideoLayout.text as String)
@@ -76,6 +85,21 @@ class MenuFragment(private val menuCallBack: IMenuCallback) : BottomSheetDialogF
             menuCallBack.showVideoDeviceView()
             dismiss()
         }
+        val closedCaptionFeatureObservable =
+            SampleApplication.blueJeansSDK.meetingService.closedCaptioningService.isClosedCaptioningAvailable
+        if (closedCaptionFeatureObservable.value == true) {
+            menuFragmentBinding?.swClosedCaption?.isChecked = closedCaptionState
+            menuFragmentBinding?.swClosedCaption?.setOnCheckedChangeListener { buttonView, isChecked ->
+                if (buttonView.isPressed) {
+                    menuCallBack.handleClosedCaptionSwitchEvent(isChecked)
+                    closedCaptionState = isChecked
+                    dismiss()
+                }
+            }
+            menuFragmentBinding?.swClosedCaption?.visible()
+        } else {
+            menuFragmentBinding?.swClosedCaption?.gone()
+        }
         updateView()
     }
 
@@ -85,5 +109,10 @@ class MenuFragment(private val menuCallBack: IMenuCallback) : BottomSheetDialogF
             it.mbAudioDevice.text = currentAudioDevice
             it.mbVideoDevice.text = currentVideoDevice
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        menuFragmentBinding?.swClosedCaption?.isChecked = closedCaptionState
     }
 }
