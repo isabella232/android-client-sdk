@@ -477,6 +477,15 @@ Please refer to dokka documentation for details on the API set and the correspon
 ## ClosedCaptioningService :
 Closed Captioning is the ability to provide text for the words spoken in meetings. BlueJeans is providing means for the meeting participant to turn-on or turn-off Closed Captioning while in the meeting. Please note that Closed Captioning setting should be enabled on your meeting. As of now, only english language is supported.
 
+#### API :
+- `startClosedCaptioning()`
+- `stopClosedCaptioning()`
+
+#### Observables with Closed Captioning feature :
+- `isClosedCaptioningAvailable` provides availability of the closed captioning feature. Feature can be enabled or disabled at the scheduling options or the meeting feature associated with the account.
+- `closedCaptionText` provides closed captioning text.
+- `closedCaptioningState` provides the current state of closed captioning, can be started or stopped or null (when not in meeting)
+
 ## Logging Service :
 Uploads logs stored at internal app storage to BlueJeans SDK internal log server. The API takes user comments and the user name.
 The name of the user serves as a unique identifier for us to identify the logs uploaded.
