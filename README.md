@@ -28,8 +28,6 @@ With BlueJeans Android Client SDK, participants can join video conference meetin
 - Public and Private meeting Chat
 - Remote Video and Content mute
 - Meeting Information (Title, Hostname, URL) property
-
-## New Features :
 - 720p video capture (Experimental API)
 - Moderator Controls 
   - Meeting recording
@@ -38,7 +36,12 @@ With BlueJeans Android Client SDK, participants can join video conference meetin
   - End meeting for all immediately or after a certain delay
 - Audio capture dumps (debug facility)
 
-## Current Version : 1.1.0
+## New Features :
+
+- Closed captioning
+- Spotlight video participant
+
+## Current Version : 1.2.0
 
 ## Pre-requisites :
 - **Android API level :** Min level 26
@@ -56,7 +59,7 @@ With BlueJeans Android Client SDK, participants can join video conference meetin
    
 
 ## API Architecture
-![Android SDK API Structure](https://user-images.githubusercontent.com/23289872/131215117-4629fab3-35ec-47a1-891c-517623b4e7b5.png)
+![Android SDK API Structure](https://user-images.githubusercontent.com/23289872/134154560-f49563da-a459-4278-b26d-60e28db8cf73.png)
 
 
 ## SDK Documentation :
@@ -98,7 +101,7 @@ repositories { maven { url "https://swdl.bluejeans.com/bjnvideosdk/android" } }
 
 In app's build.gradle
 ```xml
-implementation "com.bluejeans:android-client-sdk:1.1.0"
+implementation "com.bluejeans:android-client-sdk:1.2.0"
 ```
 
 ### Upgrade Instructions :
@@ -122,7 +125,8 @@ When inactive, APIs of the services do not react and the subscriptions will yiel
 
 **_Globally active services_** -> MeetingService, VideoDeviceService, LoggingService and PermissionService.
 
-**_InMeeting active services_** -> ContentShareService, AudioDeviceService, ModeratorControlsService, PublicChatService, PrivateChatService and ParticipantsService
+**_InMeeting active services_** -> ContentShareService, AudioDeviceService, ModeratorControlsService, PublicChatService, PrivateChatService, ParticipantsService
+and ClosedCaptioningService
 
 InMeeting services get activated when _MeetingState_ transitions from _MeetingState.Validating_ to _MeetingState.Connecting_ and get inactivated
 when the meeting ends by the transition of meeting state to _MeetingState.Disconnected_
@@ -462,12 +466,16 @@ As a moderator, one can perform
 - mute, unmute participant's / all participants video
 - remove a participant from the meeting
 - end the meeting for all immediately / after a certain delay
+- spotlight a video participant : This is also referred to as "moderator pinning". Whenever a spotlight for a participant "X" is turned on by a moderator, people layout would be pushed to all the participants and the video of "X" will take the main stage irrespective of whoever is the dominant speaker. This can be used to spotlight self or any other video participant in the meeting. Spotlight is applicable only for video participants and not for audio only participants. 
 
 Note that 
 - ModeratorControlsService cannot override the local audio, video mute operations performed by the participants.
 - Participants can locally override the mute enforcements by the ModeratorControlsService
 
 Please refer to dokka documentation for details on the API set and the corresponding observables.
+
+## ClosedCaptioningService :
+Closed Captioning is the ability to provide text for the words spoken in meetings. BlueJeans is providing means for the meeting participant to turn-on or turn-off Closed Captioning while in the meeting. Please note that Closed Captioning setting should be enabled on your meeting. As of now, only english language is supported.
 
 ## Logging Service :
 Uploads logs stored at internal app storage to BlueJeans SDK internal log server. The API takes user comments and the user name.
