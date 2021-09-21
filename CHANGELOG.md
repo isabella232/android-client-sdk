@@ -93,3 +93,10 @@ Features / Changes:
 	- Remove a participant from the meeting
 	- End meeting for all immediately or after a certain delay
 - Audio capture dumps (debug facility)
+
+Version 1.2.0 *(09-2021)*
+---------------------------------
+Features / Changes:
+- Closed captioning
+- Spotlight participant video
+- Misc bug fixes
