@@ -53,6 +53,7 @@ import com.bluejeans.bluejeanssdk.devices.AudioDevice;
 import com.bluejeans.bluejeanssdk.devices.VideoDevice;
 import com.bluejeans.bluejeanssdk.devices.VideoDeviceService;
 import com.bluejeans.bluejeanssdk.logging.LoggingService;
+import com.bluejeans.bluejeanssdk.meeting.ClosedCaptioningService;
 import com.bluejeans.bluejeanssdk.meeting.ContentShareAvailability;
 import com.bluejeans.bluejeanssdk.meeting.ContentShareState;
 import com.bluejeans.bluejeanssdk.meeting.MeetingService;
@@ -92,7 +93,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private ImageView mIvMic, mIvClose, mIvMenuOption, mIvLogUploadButton;
     private ImageView mIvVideo;
     private EditText mEtEventId, mEtPassCode, mEtName;
-    private TextView mTvProgressMsg, mAppVersion;
+    private TextView mTvProgressMsg, mAppVersion, mTvClosedCaption;
     private ConstraintLayout mControlPanelContainer;
     private ImageView mIvParticipant;
     private ImageView mIvScreenShare;
@@ -295,8 +296,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         subscribeForContentShareState();
         subscribeForContentShareAvailability();
         subscribeForContentShareEvents();
+        subscribeForClosedCaptionText();
+        subscribeForClosedCaptionState();
     }
-
+    
     private void checkCameraPermissionAndStartSelfVideo() {
         if (mPermissionService.hasPermission(PermissionService.Permission.Camera.INSTANCE)) {
             startSelfVideo();
@@ -614,6 +617,36 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }));
     }
 
+    private void subscribeForClosedCaptionText() {
+        mDisposable.add(mMeetingService.getClosedCaptioningService().getClosedCaptionText()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(content -> {
+                    mTvClosedCaption.setText(content);
+                }, error -> Log.e(TAG, "Error closed caption subscription " + error)));
+    }
+
+    private void subscribeForClosedCaptionState() {
+        mDisposable.add(mMeetingService.getClosedCaptioningService().getClosedCaptioningState().subscribeOnUI(
+                closedCaptioningState -> {
+                    if (closedCaptioningState != null) {
+                        if (closedCaptioningState == ClosedCaptioningService.
+                                ClosedCaptioningState.Started.INSTANCE) {
+                            mTvClosedCaption.setVisibility(View.VISIBLE);
+                            mBottomSheetFragment.updateClosedCaptionSwitchState(true);
+                        } else {
+                            mBottomSheetFragment.updateClosedCaptionSwitchState(false);
+                            mTvClosedCaption.setVisibility(View.GONE);
+                        }
+                    }
+                    return Unit.INSTANCE;
+                }, err -> {
+                    Log.e(TAG, "Error subscribing closed caption event");
+                    return Unit.INSTANCE;
+                }
+        ));
+    }
+
     private void initViews() {
         mViewPager = findViewById(R.id.viewPager);
         // we are caching the fragment as when user change layout
@@ -639,6 +672,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         //Progress View
         mTvProgressMsg = findViewById(R.id.tvProgressMsg);
         mAppVersion = findViewById(R.id.tvAppVersion);
+        mTvClosedCaption = findViewById(R.id.tvClosedCaption);
         // Initialize adapter and click listener
         FragmentStateAdapter pagerAdapter = new ScreenSlidePagerAdapter(this);
         mViewPager.setAdapter(pagerAdapter);
@@ -686,6 +720,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mIvMenuOption.setVisibility(View.VISIBLE);
         mIvParticipant.setVisibility(View.VISIBLE);
         mIvLogUploadButton.setVisibility(View.GONE);
+        mTvClosedCaption.setVisibility(View.VISIBLE);
         mControlPanelContainer.setBackgroundResource(R.drawable.meeting_controls_panel_bg);
     }
 
@@ -702,6 +737,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mAppVersion.setVisibility(View.VISIBLE);
         mIvLogUploadButton.setVisibility(View.VISIBLE);
         mControlPanelContainer.setBackgroundResource(0);
+        mTvClosedCaption.setVisibility(View.GONE);
+        mTvClosedCaption.setText(null);
         if (mBottomSheetFragment != null && mBottomSheetFragment.isAdded()) {
             mBottomSheetFragment.dismiss();
         }
@@ -829,6 +866,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 @Override
                 public void showVideoDeviceView() {
                     showVideoDeviceDialog();
+                }
+
+                @Override
+                public void handleClosedCaptionSwitchEvent(Boolean enabled) {
+                    if (enabled) {
+                        mMeetingService.getClosedCaptioningService().startClosedCaptioning();
+                        mTvClosedCaption.setVisibility(View.VISIBLE);
+                    } else {
+                        mMeetingService.getClosedCaptioningService().stopClosedCaptioning();
+                        mTvClosedCaption.setVisibility(View.GONE);
+                    }
                 }
             };
 
@@ -976,11 +1024,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     /**
      * It calculates the new crop region by finding out the delta between active camera region's
-     * x and y coordinates and divide by zoom scale factor to get updated camera's region
+     * x and y coordinates and divide by zoom scale factor to get updated camera's region.
      *
-     * @param cameraActiveRegion active area of the image sensor
+     * @param cameraActiveRegion active area of the image sensor.
      * @param zoomFactor scale factor
-     * @return Rect coordinates of crop region to be zoomed
+     * @return Rect coordinates of crop region to be zoomed.
      */
     private Rect getCropRegionForZoom(Rect cameraActiveRegion, int zoomFactor) {
         int xCenter = cameraActiveRegion.width() / 2;

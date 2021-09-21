@@ -10,18 +10,23 @@ import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.widget.SwitchCompat;
 
 import com.bluejeans.android.sdksample.R;
+import com.bluejeans.android.sdksample.SampleApplication;
+import com.bluejeans.rxextensions.ObservableValueWithOptional;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.android.material.button.MaterialButton;
 
 public class MenuFragment extends BottomSheetDialogFragment {
-    private final IMenuCallback mIMenuCallback;
+    private IMenuCallback mIMenuCallback;
     private MaterialButton mMbVideoLayout, mMbAudioDevice, mMbVideoDevice;
     private String videoLayout = "";
     private String currentAudioDevice = "";
     private String currentVideoDevice = "";
+    private boolean closedCaptionState =  false;
+    private SwitchCompat mSwitchClosedCaption;
 
     public interface IMenuCallback {
         void showVideoLayoutView(String videoLayoutName);
@@ -29,6 +34,8 @@ public class MenuFragment extends BottomSheetDialogFragment {
         void showAudioDeviceView();
 
         void showVideoDeviceView();
+
+        void handleClosedCaptionSwitchEvent(Boolean enabled);
     }
 
     public MenuFragment(IMenuCallback iMenuCallback) {
@@ -74,14 +81,21 @@ public class MenuFragment extends BottomSheetDialogFragment {
         updateView();
     }
 
+    public void updateClosedCaptionSwitchState(boolean isClosedCaptionActive) {
+        closedCaptionState = isClosedCaptionActive;
+    }
+
     private void initViews(View view) {
         mMbVideoLayout = view.findViewById(R.id.mbVideoLayout);
         mMbAudioDevice = view.findViewById(R.id.mbAudioDevice);
         mMbVideoDevice = view.findViewById(R.id.mbVideoDevice);
+        mSwitchClosedCaption = view.findViewById(R.id.swClosedCaption);
+
         mMbVideoLayout.setOnClickListener(view1 -> {
             mIMenuCallback.showVideoLayoutView(mMbVideoLayout.getText().toString());
             dismiss();
         });
+
         mMbAudioDevice.setOnClickListener(view1 -> {
             mIMenuCallback.showAudioDeviceView();
             dismiss();
@@ -90,6 +104,22 @@ public class MenuFragment extends BottomSheetDialogFragment {
             mIMenuCallback.showVideoDeviceView();
             dismiss();
         });
+
+        ObservableValueWithOptional<Boolean> closedCaptionFeatureObservable = SampleApplication.getBlueJeansSDK().getMeetingService()
+                .getClosedCaptioningService().isClosedCaptioningAvailable();
+        if (closedCaptionFeatureObservable.getValue() == Boolean.TRUE) {
+            mSwitchClosedCaption.setChecked(closedCaptionState);
+            mSwitchClosedCaption.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (buttonView.isPressed()) {
+                    mIMenuCallback.handleClosedCaptionSwitchEvent(isChecked);
+                    closedCaptionState = isChecked;
+                    dismiss();
+                }
+            });
+            mSwitchClosedCaption.setVisibility(View.VISIBLE);
+        } else {
+            mSwitchClosedCaption.setVisibility(View.GONE);
+        }
         updateView();
     }
 
@@ -103,5 +133,11 @@ public class MenuFragment extends BottomSheetDialogFragment {
         if (mMbVideoDevice != null) {
             mMbVideoDevice.setText(currentVideoDevice);
         }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        mSwitchClosedCaption.setChecked(closedCaptionState);
     }
 }
