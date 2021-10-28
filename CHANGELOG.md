@@ -100,3 +100,11 @@ Features / Changes:
 - Closed captioning
 - Spotlight participant video
 - Misc bug fixes
+
+Version 1.3.0 *(10-2021)*
+---------------------------------
+Features / Changes:
+- Waiting Room support
+- Added information of being a moderator or not with the Participant object
+- Meeting ID and Participant Passcode properties with meeting information
+- Misc bug fixes
