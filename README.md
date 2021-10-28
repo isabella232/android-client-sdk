@@ -177,15 +177,14 @@ Refer *OnGoingMeetingService* and *MeetingNotificationUtility* for sample implem
 6. `Connected` this state determines that you are finally into the meeting.
 
 Below is a diagram depicting the meeting state transitions:
-![Meeting states](./docs/images/meeting-states.png)
+<img width="941" alt="Meeting-States" src="https://user-images.githubusercontent.com/23289872/139293856-8547c442-8eac-4321-b71c-6d7644d7ad06.png">
 
 ### Waiting Room :
 Waiting room feature enables the controlled access to a meeting and allows the moderator to choose who can join/access its meeting, either directly or selectively. When enabled, participants would be first placed into a waiting room and moderator can then selectively allow or reject the respective join request from the waiting room participants list. Participants who get placed in waiting room have no way to prove their credentials/identity and the only information that moderator would have about them, is their name.
 
 Waiting room feature for a meeting is enabled for all by default. In case you find it disabled for your meeting, please contact your admin or reach out to BlueJeans support.
 
-![Flow chart](./docs/images/flow-chart.png)
-
+![Flow chart](https://user-images.githubusercontent.com/23289872/139293102-23160b34-38eb-476b-9284-c4332dd16842.png)
 
 #### VideoDeviceService (Video device enumeration, Selection) :
 
