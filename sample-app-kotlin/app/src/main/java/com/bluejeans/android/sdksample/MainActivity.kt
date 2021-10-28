@@ -35,6 +35,7 @@ import com.bjnclientcore.ui.util.extensions.gone
 import com.bjnclientcore.ui.util.extensions.visible
 import com.bluejeans.android.sdksample.MeetingNotificationUtility.updateNotificationMessage
 import com.bluejeans.android.sdksample.databinding.ActivityMainBinding
+import com.bluejeans.android.sdksample.dialog.WaitingRoomDialog
 import com.bluejeans.android.sdksample.menu.MenuFragment
 import com.bluejeans.android.sdksample.menu.adapter.MenuItemAdapter
 import com.bluejeans.android.sdksample.participantlist.ParticipantListFragment
@@ -60,6 +61,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     private val loggingService = SampleApplication.blueJeansSDK.loggingService
     private val appVersionString = "v" + SampleApplication.blueJeansSDK.version
     private val disposable = CompositeDisposable()
+    private val joinMeetingDisposable = CompositeDisposable()
+
     private var videoState: MeetingService.VideoState? = null
 
     private var bottomSheetFragment: MenuFragment? = null
@@ -81,6 +84,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     private var isAudioMuted = false
     private var isVideoMuted = false
     private var isRemoteContentAvailable = false
+    private var isInWaitingRoom = false
+    private var isWaitingRoomEnabled = false
+    private var isScreenShareInProgress = false
+    private var isSubscribeToWaitingRoomEvents = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -101,10 +108,20 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         binding.viewPager.currentItem = 0
     }
 
+    override fun onResume() {
+        super.onResume()
+
+        if (!isScreenShareInProgress) {
+            handleMeetingState(meetingService.meetingState.value)
+        }
+    }
+
     override fun onDestroy() {
         Timber.tag(TAG).i("onDestroy")
         disposable.dispose()
+        joinMeetingDisposable.clear()
         bottomSheetFragment = null
+        isSubscribeToWaitingRoomEvents = false
         super.onDestroy()
     }
 
@@ -123,11 +140,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             }
             R.id.ivVideo -> {
                 isVideoMuted = !isVideoMuted
-                when (meetingService.meetingState.value) {
-                    MeetingService.MeetingState.Connected -> meetingService.setVideoMuted(
-                        isVideoMuted
-                    )
-                    else -> videoDeviceService.enableSelfVideoPreview(!isVideoMuted)
+                if (areInMeetingServicesAvailable()) {
+                    meetingService.setVideoMuted(isVideoMuted)
+                } else {
+                    videoDeviceService.enableSelfVideoPreview(!isVideoMuted)
                 }
                 toggleVideoMuteUnMuteView(isVideoMuted)
             }
@@ -145,15 +161,21 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             }
             R.id.imgScreenShare -> {
                 if (meetingService.contentShareService.contentShareState.value is ContentShareState.Stopped) {
+                    isScreenShareInProgress = true
                     val mediaProjectionManager =
                         getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                     startActivityLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
                 } else {
+                    isScreenShareInProgress = false
                     meetingService.contentShareService.stopContentShare()
                 }
             }
             R.id.ivCameraSettings -> showCameraSettingsDialog()
             R.id.imgUploadLogs -> showUploadLogsDialog()
+            R.id.btn_exit_waiting_room -> {
+                meetingService.endMeeting()
+                endMeeting()
+            }
         }
     }
 
@@ -235,6 +257,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun activateSDKSubscriptions() {
         subscribeForMeetingStatus()
+        subscribeToWaitingRoomEvents()
         subscribeForVideoMuteStatus()
         subscribeForAudioMuteStatus()
         subscribeForVideoState()
@@ -343,7 +366,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
         Timber.tag(TAG).i("joinMeeting meetingId = $meetingId passcode = $passcode")
         showJoiningInProgressView()
-        disposable.add(
+        joinMeetingDisposable.clear()
+        joinMeetingDisposable.add(
             meetingService.joinMeeting(
                 MeetingService.JoinParams(meetingId, passcode, name)
             ).subscribeOn(Schedulers.single())
@@ -352,12 +376,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                     { result ->
                         when (result) {
                             MeetingService.JoinResult.Success -> {
-                                meetingService.setAudioMuted(isAudioMuted)
-                                meetingService.setVideoMuted(isVideoMuted)
-                                videoDeviceService.enableSelfVideoPreview(false)
-                                OnGoingMeetingService.startService(this)
                             }
-                            else -> showOutOfMeetingView()
+                            else -> Timber.tag(TAG).i("Join result: $result")
                         }
                     },
                     { showOutOfMeetingView() })
@@ -366,27 +386,45 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun endMeeting() {
         Timber.tag(TAG).i("endMeeting")
+        if (isInWaitingRoom) {
+            isInWaitingRoom = false
+            showWaitingRoomUI()
+        } else {
+            showOutOfMeetingView()
+        }
+
+        cameraSettingsDialog?.dismiss()
+        joinMeetingDisposable.clear()
         OnGoingMeetingService.stopService(this)
-        showOutOfMeetingView()
     }
 
     private fun subscribeForMeetingStatus() {
-        disposable.add(meetingService.meetingState.subscribeOnUI(
-            { state ->
-                Timber.tag(TAG).i("Meeting state $state")
-                if (state is MeetingService.MeetingState.Connected) {
-                    // add this flag to avoid screen shots.
-                    // This also allows protection of screen during screen casts from 3rd party apps.
-                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                    showInMeetingView()
-                } else if (state is MeetingService.MeetingState.Idle) {
-                    endMeeting()
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        disposable.add(
+            meetingService.meetingState.rxObservable.observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    Log.d(TAG, "State: $it")
+                    handleMeetingState(it)
+                }, {
+                    Log.e(TAG, "${it.message}")
+                })
+        )
+    }
+
+    private fun subscribeToWaitingRoomEvents() {
+        disposable.add(meetingService.waitingRoomEvent.observeOn(AndroidSchedulers.mainThread())
+            .subscribe({
+                when (it) {
+                    MeetingService.WaitingRoomEvent.Admitted -> showToastMessage("Moderator has approved")
+                    MeetingService.WaitingRoomEvent.Denied -> showToastMessage("Denied by moderator")
+                    MeetingService.WaitingRoomEvent.Demoted -> {
+                        showToastMessage("Demoted by moderator")
+                        videoDeviceService.enableSelfVideoPreview(!isVideoMuted)
+                    }
+                    else -> Timber.tag(TAG).i("Unrecognized event: $it")
                 }
-            }
-        ) {
-            Timber.tag(TAG).e("Error in meeting status subscription ${it.message}")
-        })
+            }, {
+                Timber.tag(TAG).e(it.message)
+            }))
     }
 
     private fun subscribeForVideoState() {
@@ -569,6 +607,53 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         )
     }
 
+    private fun subscribeForModeratorWaitingRoomEvents() {
+        if (SampleApplication.blueJeansSDK.blueJeansClient.meetingSession!!.isModerator && !isSubscribeToWaitingRoomEvents) {
+            disposable.add(
+                meetingService.moderatorWaitingRoomService.isWaitingRoomEnabled
+                    .subscribe(
+                        SampleApplication.blueJeansSDK.blueJeansClient.bjnScheduler.applyUIScheduler(),
+                        {
+                            it?.let { isChecked ->
+                                isWaitingRoomEnabled = isChecked
+                                bottomSheetFragment = MenuFragment(mIOptionMenuCallback, isWaitingRoomEnabled)
+                            }
+                        }, {
+                            Timber.tag(TAG).e(it.message)
+                        }
+                    )
+            )
+
+            disposable.add(
+                meetingService.moderatorWaitingRoomService.waitingRoomParticipantEvents
+                    .subscribe(
+                        SampleApplication.blueJeansSDK.blueJeansClient.bjnScheduler.applyUIScheduler(),
+                        {
+                            when (it) {
+                                is WaitingRoomParticipantEvent.Added -> {
+                                    if (it.participants.size == 1) {
+                                        showToastMessage("${it.participants[0].name} has arrived in the waiting room")
+                                    } else if (it.participants.size > 1) {
+                                        showToastMessage("Multiple participants have arrived in the waiting room")
+                                    }
+                                }
+                                is WaitingRoomParticipantEvent.Removed -> {
+                                    if (it.participants.size == 1) {
+                                        showToastMessage("${it.participants[0].name} has left the waiting room")
+                                    } else if (it.participants.size > 1) {
+                                        showToastMessage("Multiple participants have left the waiting room")
+                                    }
+                                }
+                                else -> Timber.tag(TAG).i("Unrecognized event")
+                            }
+                        }, {
+                            Timber.tag(TAG).e(it.message)
+                        }
+                    )
+            )
+        }
+    }
+
     private fun subscribeForVideoDevices() {
         disposable.add(
             videoDeviceService.videoDevices.subscribeOnUI({ videoDevices ->
@@ -626,6 +711,9 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         val btnJoin = findViewById<Button>(R.id.btn_join)
         btnJoin.setOnClickListener(this)
 
+        val btnExitWaitingRoom = findViewById<Button>(R.id.btn_exit_waiting_room)
+        btnExitWaitingRoom.setOnClickListener(this)
+
         binding.imgClose.setOnClickListener(this)
         binding.selfView.ivMic.setOnClickListener(this)
         binding.selfView.ivVideo.setOnClickListener(this)
@@ -636,7 +724,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         binding.imgUploadLogs.setOnClickListener(this)
 
 
-        bottomSheetFragment = MenuFragment(mIOptionMenuCallback)
+        bottomSheetFragment = MenuFragment(mIOptionMenuCallback, isWaitingRoomEnabled)
         participantListFragment = ParticipantListFragment()
         videoLayoutAdapter = getVideoLayoutAdapter()
         videoDeviceAdapter = getVideoDeviceAdapter(ArrayList())
@@ -658,6 +746,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun showInMeetingView() {
         Timber.tag(TAG).i("showInMeetingView")
+        if (isInWaitingRoom) {
+            isInWaitingRoom = false
+            showWaitingRoomUI()
+        }
         binding.tvAppVersion.gone()
         binding.tvProgressMsg.gone()
         binding.joinInfo.joinInfo.gone()
@@ -728,6 +820,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
     }
 
+    private fun areInMeetingServicesAvailable(): Boolean {
+        return meetingService.meetingState.value is
+                MeetingService.MeetingState.Connecting ||
+                meetingService.meetingState.value is MeetingService.MeetingState.Connected ||
+                meetingService.meetingState.value is MeetingService.MeetingState.Reconnecting
+    }
+
     private fun closeCameraSettings() {
         zoomScaleFactor = 1
         if (cameraSettingsDialog?.isShowing == true) {
@@ -778,6 +877,43 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
     }
 
+    private fun handleMeetingState(state: MeetingService.MeetingState) {
+        when (state) {
+            is MeetingService.MeetingState.Connected -> {
+                // add this flag to avoid screen shots.
+                // This also allows protection of screen during screen casts from 3rd party apps.
+                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                OnGoingMeetingService.startService(this)
+                subscribeForModeratorWaitingRoomEvents()
+                isSubscribeToWaitingRoomEvents = true
+            }
+            is MeetingService.MeetingState.Idle -> {
+                endMeeting()
+                isInWaitingRoom = false
+                showWaitingRoomUI()
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
+            is MeetingService.MeetingState.WaitingRoom -> {
+                Timber.tag(TAG).i("Moving to WR")
+                showOutOfMeetingView()
+                isInWaitingRoom = true
+                showWaitingRoomUI()
+            }
+            is MeetingService.MeetingState.Connecting -> {
+                meetingService.setAudioMuted(isAudioMuted)
+                meetingService.setVideoMuted(isVideoMuted)
+                videoDeviceService.enableSelfVideoPreview(false)
+                isInWaitingRoom = false
+                showWaitingRoomUI()
+                showInMeetingView()
+                binding.joinInfo.joinInfo.visibility = View.GONE
+                binding.tvProgressMsg.visibility = View.VISIBLE
+                binding.tvProgressMsg.text = "Connecting..."
+            }
+            else -> Log.i(TAG, "Unknown meeting state: $state")
+        }
+    }
+
     private inner class PagerChangeCallback : ViewPager2.OnPageChangeCallback() {
         override fun onPageSelected(position: Int) {
             super.onPageSelected(position)
@@ -811,6 +947,14 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 binding.tvClosedCaption.gone()
             }
         }
+        
+        override fun showWaitingRoom() {
+            showWaitingRoomDialog()
+        }
+
+        override fun setWaitingRoomEnabled(enabled: Boolean) {
+            meetingService.moderatorWaitingRoomService.setWaitingRoomEnabled(enabled)
+        }
     }
 
     private fun videoLayoutOptionList(): List<String> {
@@ -841,6 +985,16 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             .setAdapter(videoDeviceAdapter) { _, position -> selectVideoDevice(position) }
             .create()
         videoDeviceDialog?.show()
+    }
+
+    private fun showWaitingRoomDialog() {
+        val waitingRoomParticipants = meetingService.moderatorWaitingRoomService.waitingRoomParticipants
+        if (!waitingRoomParticipants.isNullOrEmpty()) {
+            WaitingRoomDialog.newInstance(waitingRoomParticipants, meetingService)
+                .show(supportFragmentManager, WaitingRoomDialog.TAG)
+        } else {
+            showToastMessage("There are no participants in waiting room")
+        }
     }
 
     private fun updateCurrentVideoDeviceForAlertDialog(videoDevice: VideoDevice) {
@@ -1020,6 +1174,19 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             else -> binding.joinInfo.etName.text.toString()
         }
     }
+
+    private fun showWaitingRoomUI() {
+        if (isInWaitingRoom) {
+            binding.joinInfo.joinInfo.visibility = View.GONE
+            binding.waitingRoomLayout.clWaitingRoom.visibility = View.VISIBLE
+        } else {
+            binding.joinInfo.joinInfo.visibility = View.VISIBLE
+            binding.waitingRoomLayout.clWaitingRoom.visibility = View.GONE
+        }
+        hideProgress()
+    }
+
+
 
     companion object {
         const val TAG = "MainActivity"

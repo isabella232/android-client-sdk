@@ -7,8 +7,11 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import com.bluejeans.android.sdksample.SampleApplication
 import com.bluejeans.android.sdksample.databinding.LayoutParticipantItemBinding
 import com.bluejeans.android.sdksample.participantlist.ParticipantListAdapter.RosterViewHolder
+import com.bluejeans.bluejeanssdk.BlueJeansSDK
+import com.bluejeans.bluejeanssdk.meeting.MeetingService
 import com.bluejeans.bluejeanssdk.meeting.ParticipantsService
 
 class ParticipantListAdapter constructor(
@@ -76,6 +79,17 @@ class ParticipantListAdapter constructor(
                 bindingView.ivRosterAudioStatus.visibility = View.VISIBLE
                 bindingView.ivRosterVideoStatus.visibility = View.VISIBLE
                 bindingView.ivPrivateChat.visibility = View.GONE
+            }
+
+            if (!participant.isSelf && !isForChat && SampleApplication.blueJeansSDK.blueJeansClient.meetingSession?.isModerator == true
+                && SampleApplication.blueJeansSDK.meetingService.moderatorWaitingRoomService.isWaitingRoomEnabled.value == true) {
+                bindingView.btnDemote.setOnClickListener {
+                    SampleApplication.blueJeansSDK.meetingService.moderatorWaitingRoomService.demote(
+                        participant
+                    )
+                }
+            } else {
+                bindingView.btnDemote.visibility = View.GONE
             }
         }
     }

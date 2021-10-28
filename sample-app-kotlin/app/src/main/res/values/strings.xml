@@ -33,4 +33,14 @@
     <string name="type_message">Type a message</string>
     <string name="chat">Chat</string>
     <string name="togglecc">CC</string>
+
+    <string name="waiting_room">Waiting Room</string>
+    <string name="waiting_room_message">You are in waiting room. Waiting for the moderator to approve/deny your join request.</string>
+    <string name="exit_waiting_room">Exit Waiting Room</string>
+    <string name="view_waiting_room">View Waiting Room</string>
+    <string name="admit">Admit</string>
+    <string name="deny">Deny</string>
+    <string name="admit_all">Admit All</string>
+    <string name="deny_all">Deny All</string>
+    <string name="demote">Demote</string>
 </resources>

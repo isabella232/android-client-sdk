@@ -13,8 +13,15 @@ import com.bluejeans.android.sdksample.SampleApplication
 import com.bluejeans.android.sdksample.databinding.FragmentOptionMenuDialogBinding
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import io.reactivex.rxjava3.disposables.Disposable
+import timber.log.Timber
 
-class MenuFragment(private val menuCallBack: IMenuCallback) : BottomSheetDialogFragment() {
+class MenuFragment(
+    private val menuCallBack: IMenuCallback,
+    private val isWaitingRoomEnabled: Boolean
+    ) : BottomSheetDialogFragment() {
+
+    private val TAG = "MenuFragment"
 
     private var videoLayout = ""
     private var currentAudioDevice = ""
@@ -23,11 +30,15 @@ class MenuFragment(private val menuCallBack: IMenuCallback) : BottomSheetDialogF
     private var menuFragmentBinding: FragmentOptionMenuDialogBinding? = null
     private var bottomSheetBehavior: BottomSheetBehavior<View>? = null
 
+    private lateinit var disposable: Disposable
+
     interface IMenuCallback {
         fun showVideoLayoutView(videoLayoutName: String)
         fun showAudioDeviceView()
         fun showVideoDeviceView()
         fun handleClosedCaptionSwitchEvent(isChecked: Boolean)
+        fun showWaitingRoom()
+        fun setWaitingRoomEnabled(enabled: Boolean)
     }
 
     override fun onStart() {
@@ -42,7 +53,29 @@ class MenuFragment(private val menuCallBack: IMenuCallback) : BottomSheetDialogF
         savedInstanceState: Bundle?
     ): View {
         menuFragmentBinding = FragmentOptionMenuDialogBinding.inflate(inflater, container, false)
+
+        if (isWaitingRoomEnabled) {
+            menuFragmentBinding!!.swWaitingRoom.isChecked = isWaitingRoomEnabled
+        }
+
+        disposable = SampleApplication.blueJeansSDK.meetingService.moderatorWaitingRoomService.isWaitingRoomEnabled
+            .subscribe(
+                SampleApplication.blueJeansSDK.blueJeansClient.bjnScheduler.applyUIScheduler(),
+                {
+                    it?.let { isChecked ->
+                        menuFragmentBinding!!.swWaitingRoom.isChecked = isChecked
+                    }
+                },
+                {
+                    Timber.tag(TAG).e(it.message)
+                })
+
         return menuFragmentBinding!!.root
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        disposable.dispose()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -85,6 +118,7 @@ class MenuFragment(private val menuCallBack: IMenuCallback) : BottomSheetDialogF
             menuCallBack.showVideoDeviceView()
             dismiss()
         }
+
         val closedCaptionFeatureObservable =
             SampleApplication.blueJeansSDK.meetingService.closedCaptioningService.isClosedCaptioningAvailable
         if (closedCaptionFeatureObservable.value == true) {
@@ -100,6 +134,25 @@ class MenuFragment(private val menuCallBack: IMenuCallback) : BottomSheetDialogF
         } else {
             menuFragmentBinding?.swClosedCaption?.gone()
         }
+
+        if (SampleApplication.blueJeansSDK.blueJeansClient.meetingSession?.isModerator == true) {
+            menuFragmentBinding?.llWaitingRoom?.visibility = View.VISIBLE
+
+            if (SampleApplication.blueJeansSDK.meetingService.moderatorWaitingRoomService.isWaitingRoomCapable.value == true) {
+                menuFragmentBinding?.btnShowWaitingRoom?.setOnClickListener {
+                    menuCallBack.showWaitingRoom()
+                    dismiss()
+                }
+
+                menuFragmentBinding?.swWaitingRoom?.setOnCheckedChangeListener { compoundButton, b ->
+                    menuCallBack.setWaitingRoomEnabled(b)
+                }
+            } else if (SampleApplication.blueJeansSDK.meetingService.moderatorWaitingRoomService.isWaitingRoomCapable.value == false) {
+                menuFragmentBinding?.btnShowWaitingRoom?.isEnabled = false
+                menuFragmentBinding?.swWaitingRoom?.isEnabled = false
+            }
+        }
+
         updateView()
     }
 

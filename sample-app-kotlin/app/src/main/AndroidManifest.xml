@@ -21,11 +21,14 @@
             </intent-filter>
         </activity>
 
-        <!--foregroundServiceType needed only if your target SDK version is >= 29-->
+        <!-- foregroundServiceType needed only if your target SDK version is >= 29
+            App targeting Android 11 (API level 30) or higher and accesses the microphone in a foreground service,
+            declare the camera or microphone foreground service types, respectively, as attributes of your <service> component.
+            refer https://developer.android.com/guide/components/foreground-services for more info.-->
         <service
             android:name=".OnGoingMeetingService"
-            android:foregroundServiceType="mediaProjection"
-            android:stopWithTask="true" />
+            android:foregroundServiceType="mediaProjection|microphone|connectedDevice|mediaPlayback|camera"
+            android:stopWithTask="false" />
 
     </application>
 
