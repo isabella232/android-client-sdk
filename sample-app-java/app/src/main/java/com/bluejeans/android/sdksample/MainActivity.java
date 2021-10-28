@@ -29,7 +29,6 @@ import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -40,8 +39,8 @@ import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.fragment.app.Fragment;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 import androidx.viewpager2.widget.ViewPager2;
-
 import com.bjnclientcore.inmeeting.contentshare.ContentShareType;
+import com.bluejeans.android.sdksample.dialog.WaitingRoomDialog;
 import com.bluejeans.android.sdksample.menu.MenuFragment;
 import com.bluejeans.android.sdksample.menu.MenuFragment.IMenuCallback;
 import com.bluejeans.android.sdksample.menu.adapters.AudioDeviceAdapter;
@@ -57,19 +56,18 @@ import com.bluejeans.bluejeanssdk.meeting.ClosedCaptioningService;
 import com.bluejeans.bluejeanssdk.meeting.ContentShareAvailability;
 import com.bluejeans.bluejeanssdk.meeting.ContentShareState;
 import com.bluejeans.bluejeanssdk.meeting.MeetingService;
+import com.bluejeans.bluejeanssdk.meeting.ParticipantsService;
+import com.bluejeans.bluejeanssdk.meeting.WaitingRoomParticipantEvent;
 import com.bluejeans.bluejeanssdk.permission.PermissionService;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import kotlin.Unit;
-
 import static com.bluejeans.android.sdksample.utils.AudioDeviceHelper.getAudioDeviceName;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
@@ -82,12 +80,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private final VideoDeviceService mVideoDeviceService = SampleApplication.getBlueJeansSDK().getVideoDeviceService();
 
     private final CompositeDisposable mDisposable = new CompositeDisposable();
+    private final CompositeDisposable mJoinMeetingDisposable = new CompositeDisposable();
     private boolean mIsAudioMuted, mIsVideoMuted;
     private MeetingService.VideoState mVideoState;
     private boolean mIsRemoteContentAvailable;
 
     //View IDs
-    private ConstraintLayout mSelfView, mJoinLayout;
+    private ConstraintLayout mSelfView, mJoinLayout, mWaitingRoomLayout;
+    private Button btnJoin, btnExitWaitingRoom;
     private ViewPager2 mViewPager;
     private TabLayout mTabLayout;
     private ImageView mIvMic, mIvClose, mIvMenuOption, mIvLogUploadButton;
@@ -112,6 +112,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private AlertDialog mCameraSettingsDialog = null;
     private ProgressBar mProgressBar = null;
     private int mZoomScaleFactor = 1; // default value of 1, no zoom to start with
+    private boolean isInWaitingRoom = false;
+    private boolean isWaitingRoomEnabled = false;
+    private boolean isScreenShareInProgress = false;
+    private boolean isSubscribeToWaitingRoomEvents = false;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -141,8 +145,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (!isScreenShareInProgress) {
+            MeetingService.MeetingState meetingState = mMeetingService.getMeetingState().getValue();
+            handleMeetingState(meetingState);
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         mDisposable.dispose();
+        mJoinMeetingDisposable.clear();
         mBottomSheetFragment = null;
         super.onDestroy();
     }
@@ -169,7 +184,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.ivVideo:
                 mIsVideoMuted = !mIsVideoMuted;
-                if (mMeetingService.getMeetingState().getValue() instanceof MeetingService.MeetingState.Connected) {
+                if (areInMeetingServicesAvailable()) {
                     mMeetingService.setVideoMuted(mIsVideoMuted);
                 } else {
                     mVideoDeviceService.enableSelfVideoPreview(!mIsVideoMuted);
@@ -185,9 +200,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.imgScreenShare:
                 if (mMeetingService.getContentShareService().getContentShareState().getValue() instanceof ContentShareState.Stopped) {
+                    isScreenShareInProgress = true;
                     MediaProjectionManager mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
                     activityResultLauncher.launch(mediaProjectionManager.createScreenCaptureIntent());
                 } else {
+                    isScreenShareInProgress = false;
                     mMeetingService.getContentShareService().stopContentShare();
                 }
                 break;
@@ -197,6 +214,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
             case R.id.imgUploadLogs:
                 showUploadLogsDialog();
+                break;
+
+            case R.id.btn_exit_waiting_room:
+                mMeetingService.endMeeting();
+                endMeeting();
                 break;
             default:
         }
@@ -283,6 +305,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void activateSDKSubscriptions() {
         subscribeForMeetingStatus();
+        subscribeToWaitingRoomEvents();
         subscribeForVideoMuteStatus();
         subscribeForAudioMuteStatus();
         subscribeForVideoState();
@@ -352,8 +375,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         String name = (TextUtils.isEmpty(mEtName.getText().toString()) ? "AndroidSDK"
                 : mEtName.getText().toString());
         showJoiningInProgressView();
-
-        mDisposable.add(mMeetingService.joinMeeting(
+        mJoinMeetingDisposable.clear();
+        mJoinMeetingDisposable.add(mMeetingService.joinMeeting(
                 new MeetingService.JoinParams
                         (meetingId, passcode, name))
                 .subscribeOn(Schedulers.single())
@@ -361,19 +384,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 .subscribe(
                         result -> {
                             Log.i(TAG, "Join state is " + result);
-                            if (result == MeetingService.JoinResult.Success.INSTANCE) {
-                                // Explicitly apply the current AV mute states as per user
-                                // expectation after join success.
-                                // SDK does not provide a scope to apply mute states out of meeting
-                                if (mIsAudioMuted) {
-                                    mMeetingService.setAudioMuted(true);
-                                }
-                                if (mIsVideoMuted) {
-                                    mMeetingService.setVideoMuted(true);
-                                }
-                                mVideoDeviceService.enableSelfVideoPreview(false);
-                                OnGoingMeetingService.startService(this);
-                            } else {
+                            if (result != MeetingService.JoinResult.Success.INSTANCE) {
                                 showOutOfMeetingView();
                             }
                         },
@@ -382,31 +393,52 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void endMeeting() {
+        if (isInWaitingRoom) {
+            isInWaitingRoom = false;
+            showWaitingRoomUI();
+        } else {
+            showOutOfMeetingView();
+        }
+
+        if (mCameraSettingsDialog != null)
+            mCameraSettingsDialog.dismiss();
         OnGoingMeetingService.stopService(this);
-        showOutOfMeetingView();
+        mJoinMeetingDisposable.clear();
     }
 
     // Return Unit.INSTANCE; is needed for a kotlin java interop
     // Refer https://developer.android.com/kotlin/interop#lambda_arguments for more details
     private void subscribeForMeetingStatus() {
-        mDisposable.add(mMeetingService.getMeetingState().subscribeOnUI(
-                state -> {
-                    Log.i(TAG, " Meeting state " + state);
-                    if (state instanceof MeetingService.MeetingState.Connected) {
-                        // add this flag to avoid screen shots.
-                        // This also allows protection of screen during screen casts from 3rd party apps.
-                        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-                        showInMeetingView();
-                    } else if (state instanceof MeetingService.MeetingState.Idle) {
-                        endMeeting();
-                        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
-                    }
-                    return Unit.INSTANCE;
-                },
-                err -> {
-                    Log.e(TAG, "Error in meeting status subscription" + err.getMessage());
-                    return Unit.INSTANCE;
-                }));
+        mDisposable.add(
+                mMeetingService.getMeetingState().getRxObservable().observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(state -> {
+                        Log.d(TAG, "State: " + state);
+                        handleMeetingState(state);
+                    }, err -> {
+                        Log.e(TAG, err.getMessage());
+                    })
+        );
+    }
+
+    private void subscribeToWaitingRoomEvents() {
+        mDisposable.add(mMeetingService.getWaitingRoomEvent().observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                        event -> {
+                            if (event instanceof MeetingService.WaitingRoomEvent.Denied) {
+                                showToastMessage("Denied by moderator");
+                            } else if (event instanceof MeetingService.WaitingRoomEvent.Demoted) {
+                                showToastMessage("Demoted by moderator");
+                                mVideoDeviceService.enableSelfVideoPreview(!mIsVideoMuted);
+                            } else if (event instanceof MeetingService.WaitingRoomEvent.Admitted) {
+                                showToastMessage("Moderator has approved");
+                            } else {
+                                Log.w(TAG, "Unrecognized event: " + event);
+                            }
+                        },
+                        err -> {
+                            Log.e(TAG, err.getMessage());
+                        })
+        );
     }
 
     private void subscribeForVideoState() {
@@ -646,6 +678,60 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
         ));
     }
+    
+    private void subscribeForModeratorWaitingRoomEvents() {
+        boolean isModerator = SampleApplication.getBlueJeansSDK()
+                .getBlueJeansClient().getMeetingSession().isModerator();
+        if (isModerator && !isSubscribeToWaitingRoomEvents) {
+            mDisposable.add(mMeetingService.getModeratorWaitingRoomService().isWaitingRoomEnabled()
+                    .subscribe(
+                            SampleApplication.getBlueJeansSDK().getBlueJeansClient().bjnScheduler.applyUIScheduler(),
+                            isEnabled -> {
+                                if (isEnabled == true) {
+                                    isWaitingRoomEnabled = true;
+                                } else {
+                                    isWaitingRoomEnabled = false;
+                                }
+                                mBottomSheetFragment = new MenuFragment(mIOptionMenuCallback, isWaitingRoomEnabled);
+                                return Unit.INSTANCE;
+                            }, err -> {
+                                Log.e(TAG, "Error subscribing to waiting room enabled");
+                                return Unit.INSTANCE;
+                            }
+                    ));
+
+            mDisposable.add(mMeetingService.getModeratorWaitingRoomService().getWaitingRoomParticipantEvents()
+                    .subscribe(
+                            SampleApplication.getBlueJeansSDK().getBlueJeansClient().bjnScheduler.applyUIScheduler(),
+                            event -> {
+                                if (event instanceof WaitingRoomParticipantEvent.Added) {
+                                    if (((WaitingRoomParticipantEvent.Added) event).getParticipants().size() == 1) {
+                                        showToastMessage(((WaitingRoomParticipantEvent.Added) event).getParticipants().get(0).getName() + " has arrived in the waiting room");
+                                    } else if (((WaitingRoomParticipantEvent.Added) event).getParticipants().size() > 1) {
+                                        showToastMessage("Multiple participants have arrived in the waiting room");
+                                    }
+                                } else if (event instanceof WaitingRoomParticipantEvent.Removed) {
+                                    if (((WaitingRoomParticipantEvent.Removed) event).getParticipants().size() == 1) {
+                                        showToastMessage(((WaitingRoomParticipantEvent.Removed) event).getParticipants().get(0).getName() + " has left the waiting room");
+                                    } else if (((WaitingRoomParticipantEvent.Removed) event).getParticipants().size() > 1) {
+                                        showToastMessage("Multiple participants have left the waiting room");
+                                    }
+                                }
+                                return Unit.INSTANCE;
+                            }, err -> {
+                                Log.e(TAG, "Unknown waiting room participant event: " + err.getMessage());
+                                return Unit.INSTANCE;
+                            }
+                    )
+            );
+        }
+    }
+
+    private boolean areInMeetingServicesAvailable() {
+        return mMeetingService.getMeetingState().getValue() instanceof MeetingService.MeetingState.Connecting
+                || mMeetingService.getMeetingState().getValue() instanceof MeetingService.MeetingState.Connected
+                || mMeetingService.getMeetingState().getValue() instanceof MeetingService.MeetingState.Reconnecting;
+    }
 
     private void initViews() {
         mViewPager = findViewById(R.id.viewPager);
@@ -669,6 +755,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mEtEventId = findViewById(R.id.etEventId);
         mEtPassCode = findViewById(R.id.etPasscode);
         mEtName = findViewById(R.id.etName);
+        // Waiting Room Layout
+        mWaitingRoomLayout = findViewById(R.id.waiting_room_layout);
         //Progress View
         mTvProgressMsg = findViewById(R.id.tvProgressMsg);
         mAppVersion = findViewById(R.id.tvAppVersion);
@@ -680,8 +768,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         new TabLayoutMediator(mTabLayout, mViewPager, (tab, position) -> {
         }).attach();
 
-        Button btnJoin = findViewById(R.id.btnJoin);
+        btnJoin = findViewById(R.id.btnJoin);
         btnJoin.setOnClickListener(this);
+        btnExitWaitingRoom = findViewById(R.id.btn_exit_waiting_room);
+        btnExitWaitingRoom.setOnClickListener(this);
         mIvLogUploadButton = findViewById(R.id.imgUploadLogs);
         mIvLogUploadButton.setOnClickListener(this);
         mIvClose.setOnClickListener(this);
@@ -691,7 +781,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mIvMic.setOnClickListener(this);
         mIvVideo.setOnClickListener(this);
         mCameraSettings.setOnClickListener(this);
-        mBottomSheetFragment = new MenuFragment(mIOptionMenuCallback);
+        mBottomSheetFragment = new MenuFragment(mIOptionMenuCallback, isWaitingRoomEnabled);
         mParticipantListFragment = new ParticipantListFragment();
         mVideoLayoutAdapter = getVideoLayoutAdapter();
         mVideoDeviceAdapter = getVideoDeviceAdapter(new ArrayList<>());
@@ -878,6 +968,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         mTvClosedCaption.setVisibility(View.GONE);
                     }
                 }
+
+                @Override
+                public void showWaitingRoom() {
+                    showWaitingRoomDialog();
+                }
+
+                @Override
+                public void setWaitingRoomEnabled(boolean enabled) {
+                    Log.i(TAG, "WR status: " + enabled);
+                    mMeetingService.getModeratorWaitingRoomService().setWaitingRoomEnabled(enabled);
+                }
             };
 
     private ArrayList<String> videoLayoutOptionList() {
@@ -910,6 +1011,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 .setAdapter(mVideoDeviceAdapter,
                         (dialog, which) -> selectVideoDevice(which)).create();
         mVideoDeviceDialog.show();
+    }
+
+    private void showWaitingRoomDialog() {
+        List<ParticipantsService.Participant> waitingRoomParticipants = mMeetingService.getModeratorWaitingRoomService().getWaitingRoomParticipants();
+        if (waitingRoomParticipants != null && waitingRoomParticipants.size() > 0) {
+            WaitingRoomDialog.newInstance(waitingRoomParticipants, mMeetingService)
+                    .show(getSupportFragmentManager(), "WaitingRoomDialog");
+        } else {
+            showToastMessage("There are no participants in the waiting room");
+        }
     }
 
     private void updateCurrentVideoDeviceForAlertDialog(VideoDevice videoDevice) {
@@ -1022,6 +1133,40 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mCameraSettingsDialog.show();
     }
 
+    private void handleMeetingState(MeetingService.MeetingState meetingState) {
+        if (meetingState instanceof MeetingService.MeetingState.Connected) {
+            // add this flag to avoid screen shots.
+            // This also allows protection of screen during screen casts from 3rd party apps.
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            OnGoingMeetingService.startService(getApplicationContext());
+            subscribeForModeratorWaitingRoomEvents();
+            isSubscribeToWaitingRoomEvents = true;
+        } else if (meetingState instanceof MeetingService.MeetingState.Idle) {
+            endMeeting();
+            isInWaitingRoom = false;
+            showWaitingRoomUI();
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        } else if (meetingState instanceof  MeetingService.MeetingState.WaitingRoom) {
+            isInWaitingRoom = true;
+            showOutOfMeetingView();
+            showWaitingRoomUI();
+        } else if (meetingState instanceof MeetingService.MeetingState.Connecting) {
+            mMeetingService.setAudioMuted(mIsAudioMuted);
+            mMeetingService.setVideoMuted(mIsVideoMuted);
+            mVideoDeviceService.enableSelfVideoPreview(false);
+            isInWaitingRoom = false;
+            showWaitingRoomUI();
+            showInMeetingView();
+            mEtPassCode.setVisibility(View.GONE);
+            mEtName.setVisibility(View.GONE);
+            mEtEventId.setVisibility(View.GONE);
+            btnJoin.setVisibility(View.GONE);
+            mJoinLayout.setVisibility(View.GONE);
+            mTvProgressMsg.setVisibility(View.VISIBLE);
+            mTvProgressMsg.setText("Connecting...");
+        }
+    }
+
     /**
      * It calculates the new crop region by finding out the delta between active camera region's
      * x and y coordinates and divide by zoom scale factor to get updated camera's region.
@@ -1049,5 +1194,24 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             Log.e(TAG, "No active camera device");
             throw new CameraAccessException(CameraAccessException.CAMERA_ERROR);
         }
+    }
+
+    private void showWaitingRoomUI() {
+        if (isInWaitingRoom) {
+            mEtPassCode.setVisibility(View.GONE);
+            mEtName.setVisibility(View.GONE);
+            mEtEventId.setVisibility(View.GONE);
+            btnJoin.setVisibility(View.GONE);
+            mJoinLayout.setVisibility(View.GONE);
+            mWaitingRoomLayout.setVisibility(View.VISIBLE);
+        } else {
+            mEtPassCode.setVisibility(View.VISIBLE);
+            mEtName.setVisibility(View.VISIBLE);
+            mEtEventId.setVisibility(View.VISIBLE);
+            btnJoin.setVisibility(View.VISIBLE);
+            mJoinLayout.setVisibility(View.VISIBLE);
+            mWaitingRoomLayout.setVisibility(View.GONE);
+        }
+        hideProgress();
     }
 }

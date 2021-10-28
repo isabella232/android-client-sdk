@@ -62,7 +62,6 @@
             android:paddingStart="@dimen/_8dp"
             android:textStyle="bold"
             android:layout_marginTop="2dp"
-            android:text="20"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="@+id/ivChatBubble"
             app:layout_constraintStart_toStartOf="@+id/ivChatBubble" />
@@ -95,15 +94,12 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvRosterParticipants"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:layout_marginStart="@dimen/_24dp"
-        android:layout_marginTop="@dimen/_6dp"
-        android:layout_marginEnd="@dimen/_24dp"
         android:clipToPadding="false"
-        android:paddingBottom="@dimen/_16dp"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toEndOf="@id/titleView"
         app:layout_constraintTop_toBottomOf="@+id/titleView" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

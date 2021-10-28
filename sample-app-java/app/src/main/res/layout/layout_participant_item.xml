@@ -46,7 +46,7 @@
         android:layout_height="@dimen/_24dp"
         android:src="@drawable/video_state"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/btnDemote"
         app:layout_constraintTop_toTopOf="parent" />
 
     <ImageView
@@ -58,6 +58,15 @@
         android:src="@drawable/audio_state"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/ivRosterVideoStatus"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/btnDemote"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/demote"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

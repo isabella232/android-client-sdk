@@ -10,11 +10,15 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+import com.bjnclientcore.inmeeting.MeetingSession;
 import com.bluejeans.android.sdksample.R;
+import com.bluejeans.android.sdksample.SampleApplication;
+import com.bluejeans.bluejeanssdk.meeting.ModeratorWaitingRoomService;
 import com.bluejeans.bluejeanssdk.meeting.ParticipantsService;
 import java.util.ArrayList;
 import java.util.List;
@@ -82,6 +86,7 @@ public class ParticipantListAdapter extends RecyclerView.Adapter<ParticipantList
         ImageView mVideoState;
         ImageView mChatArrow;
         TextView mUnreadCount;
+        Button mBtnDemote;
 
         public participantViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -91,6 +96,7 @@ public class ParticipantListAdapter extends RecyclerView.Adapter<ParticipantList
             mVideoState = itemView.findViewById(R.id.ivRosterVideoStatus);
             mChatArrow = itemView.findViewById(R.id.ivPrivateChat);
             mUnreadCount = itemView.findViewById(R.id.tvUnreadCount);
+            mBtnDemote = itemView.findViewById(R.id.btnDemote);
         }
 
         public void bind(ParticipantsService.Participant participant) {
@@ -111,6 +117,22 @@ public class ParticipantListAdapter extends RecyclerView.Adapter<ParticipantList
                 mAudioState.setVisibility(View.VISIBLE);
                 mVideoState.setVisibility(View.VISIBLE);
                 mChatArrow.setVisibility(View.GONE);
+            }
+
+            ModeratorWaitingRoomService moderatorWaitingRoomService = SampleApplication.getBlueJeansSDK()
+                    .getMeetingService().getModeratorWaitingRoomService();
+            MeetingSession meetingSession = SampleApplication.getBlueJeansSDK().getBlueJeansClient().getMeetingSession();
+
+            if (!participant.isSelf() && !isForChat && moderatorWaitingRoomService != null
+                    && moderatorWaitingRoomService.isWaitingRoomEnabled().getValue() != null && moderatorWaitingRoomService.isWaitingRoomEnabled().getValue()
+                    && meetingSession != null && meetingSession.isModerator() == true) {
+                mBtnDemote.setOnClickListener(v -> {
+                    SampleApplication.getBlueJeansSDK().getMeetingService().getModeratorWaitingRoomService().demote(
+                            participant
+                    );
+                });
+            } else {
+                mBtnDemote.setVisibility(View.GONE);
             }
         }
     }
