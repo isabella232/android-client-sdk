@@ -37,11 +37,9 @@ With BlueJeans Android Client SDK, participants can join video conference meetin
 - Audio capture dumps (debug facility)
 
 ## New Features :
+- Waiting room
 
-- Closed captioning
-- Spotlight video participant
-
-## Current Version : 1.2.0
+## Current Version : 1.3.0
 
 ## Pre-requisites :
 - **Android API level :** Min level 26
@@ -59,7 +57,7 @@ With BlueJeans Android Client SDK, participants can join video conference meetin
    
 
 ## API Architecture
-![Android SDK API Structure](https://user-images.githubusercontent.com/23289872/134154560-f49563da-a459-4278-b26d-60e28db8cf73.png)
+![Android SDK API Structure](https://user-images.githubusercontent.com/92993169/139242965-fb748808-e191-4308-be4d-4dc682f53c56.png)
 
 
 ## SDK Documentation :
@@ -101,7 +99,7 @@ repositories { maven { url "https://swdl.bluejeans.com/bjnvideosdk/android" } }
 
 In app's build.gradle
 ```xml
-implementation "com.bluejeans:android-client-sdk:1.2.0"
+implementation "com.bluejeans:android-client-sdk:1.3.0"
 ```
 
 ### Upgrade Instructions :
@@ -168,7 +166,25 @@ Refer *OnGoingMeetingService* and *MeetingNotificationUtility* for sample implem
 - Provide Mic(RecordAudio) and Camera Permissions either by using BJN SDK permissionService or by Android SDK APIs
 - Get and add *SelfVideoFragment* and *enableSelfVideoPreview* to start the self video
 - Get and use meeting service and invoke join APIs to join a meeting
-- Observe for Join API result by subscribing to the Rx Single returned by the join API
+- Observe the meeting state by subscribing to the `meetingState` observable offered by `MeetingService`.
+
+#### Following are the states which can be observed by subscribing to `meetingState` :
+1. `Idle` is a state which determines that a meeting is not in progress.
+2. `Validating` determines that the join request is being validated by the back end.
+3. `WaitingRoom` is a state which is received when waiting room you try to join a waiting room enabled meeting as a participant. Please click [here](#waiting-room-) to learn more about `Waiting Room`.
+4. `Connecting` is a state which determines that meeting was successfully authenticated and you are about to join the meeting.
+5. `Reconnecting` is same as `Connecting`. This state is produced when a network glitch occurs.
+6. `Connected` this state determines that you are finally into the meeting.
+
+Below is a diagram depicting the meeting state transitions:
+![Meeting states](./docs/images/meeting-states.png)
+
+### Waiting Room :
+Waiting room feature enables the controlled access to a meeting and allows the moderator to choose who can join/access its meeting, either directly or selectively. When enabled, participants would be first placed into a waiting room and moderator can then selectively allow or reject the respective join request from the waiting room participants list. Participants who get placed in waiting room have no way to prove their credentials/identity and the only information that moderator would have about them, is their name.
+
+Waiting room feature for a meeting is enabled for all by default. In case you find it disabled for your meeting, please contact your admin or reach out to BlueJeans support.
+
+![Flow chart](./docs/images/flow-chart.png)
 
 
 #### VideoDeviceService (Video device enumeration, Selection) :
@@ -209,8 +225,11 @@ to provide better app performance experience**
 - Use `is720pEnabled` observable to track the enablement and disablement of 720p.
 - The reciever app should support 720p receive in order to receive 720p from the SDK endpoint. Note that the Android Client SDK currently does not support 720p receive and the BlueJeans desktop, Desktop browser solutions support 720p receive.
 
+###### Feature availability :
+Some features (such as closed captioning) are not available in every meeting. Their availability depends on the account of the meeting owner, and the enterprise they belong to. The SDK provides methods to check if these features are available (e.g. isWaitingRoomCapable). To enable a feature that is not available on your account, please contact your enterprise admin and get the feature enabled through [BlueJeans support team](https://support.bluejeans.com/s/contactsupport).
+
 ## Meeting Service :
-This service takes care of all meeting-related APIs. Apart from meeting related APIs, the service also provides provides for several inMeeting services - ParticipantsService, AudioDeviceService, ContentShareService, PublicChatService, and PrivateChatService.
+This service takes care of all meeting-related APIs. Apart from meeting related APIs, the service also provides provides for several inMeeting services - ParticipantsService, AudioDeviceService, ContentShareService, PublicChatService, PrivateChatService, ClosedCaptioningService and ModeratorWaitingRoomService.
 
 ### Video Layouts :
 
@@ -485,6 +504,23 @@ Closed Captioning is the ability to provide text for the words spoken in meeting
 - `isClosedCaptioningAvailable` provides availability of the closed captioning feature. Feature can be enabled or disabled at the scheduling options or the meeting feature associated with the account.
 - `closedCaptionText` provides closed captioning text.
 - `closedCaptioningState` provides the current state of closed captioning, can be started or stopped or null (when not in meeting)
+
+## ModeratorWaitingRoomService :
+This is an in-meeting service that provides waiting room controls. This is available only for a moderator.
+`isWaitingRoomCapable` can be checked to see if the meeting supports waiting room or not.
+
+As a moderator, one can perform
+- turn waiting room on/off
+- admit a waiting room participant into the meeting
+- add all waiting room participants into the meeting
+- deny a waiting room participant from joining a meeting
+- deny all waiting room participants from joining a meeting
+- demote an in-meeting participant to the waiting room
+
+Note that
+- An in-meeting participant can be demoted only if the waiting room is turned on.
+
+Please refer to dokka documentation for details on the API set and the corresponding observables.
 
 ## Logging Service :
 Uploads logs stored at internal app storage to BlueJeans SDK internal log server. The API takes user comments and the user name.
