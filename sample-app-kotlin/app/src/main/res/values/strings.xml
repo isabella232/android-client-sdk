@@ -19,6 +19,9 @@
     <string name="log_comments">Comments.</string>
     <string name="upload_logs_success">Logs uploaded successfully.</string>
     <string name="upload_logs_failure">Upload logs failed, Please try again.</string>
+    <string name="no_wr_participants">There are no participants in waiting room</string>
+    <string name="multiple_participants_arrived_wr">Multiple participants have arrived in the waiting room</string>
+    <string name="multiple_participants_left_wr">Multiple participants have left the waiting room</string>
 
     <string name="participant">Participants</string>
     <string name="menu_option">"Menu "</string>
@@ -43,4 +46,6 @@
     <string name="admit_all">Admit All</string>
     <string name="deny_all">Deny All</string>
     <string name="demote">Demote</string>
+    <string name="reconnecting">Reconnecting...</string>
+    <string name="reconnected">Reconnected</string>
 </resources>

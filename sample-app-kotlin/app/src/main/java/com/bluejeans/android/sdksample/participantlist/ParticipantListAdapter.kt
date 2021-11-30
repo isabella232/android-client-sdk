@@ -81,8 +81,9 @@ class ParticipantListAdapter constructor(
                 bindingView.ivPrivateChat.visibility = View.GONE
             }
 
-            if (!participant.isSelf && !isForChat && SampleApplication.blueJeansSDK.blueJeansClient.meetingSession?.isModerator == true
-                && SampleApplication.blueJeansSDK.meetingService.moderatorWaitingRoomService.isWaitingRoomEnabled.value == true) {
+            if (!participant.isSelf && !isForChat && SampleApplication.blueJeansSDK.
+                meetingService.moderatorControlsService.isModeratorControlsAvailable.value == true && SampleApplication.blueJeansSDK.
+                meetingService.moderatorWaitingRoomService.isWaitingRoomEnabled.value == true) {
                 bindingView.btnDemote.setOnClickListener {
                     SampleApplication.blueJeansSDK.meetingService.moderatorWaitingRoomService.demote(
                         participant

@@ -19,8 +19,8 @@ import com.bluejeans.rxextensions.ObservableValueWithOptional;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.android.material.button.MaterialButton;
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.Disposable;
-import kotlin.Unit;
 
 public class MenuFragment extends BottomSheetDialogFragment {
     private static final String TAG = "MenuFragment";
@@ -129,18 +129,16 @@ public class MenuFragment extends BottomSheetDialogFragment {
                 });
 
                 mWaitingRoomEnablementDisposable = SampleApplication.getBlueJeansSDK().getMeetingService().getModeratorWaitingRoomService().isWaitingRoomEnabled()
+                        .getRxObservable().observeOn(AndroidSchedulers.mainThread())
                         .subscribe(
-                                SampleApplication.getBlueJeansSDK().getBlueJeansClient().bjnScheduler.applyUIScheduler(),
                                 isEnabled -> {
-                                    if (isEnabled) {
+                                    if (isEnabled.getValue()) {
                                         mSwitchWaitingRoom.setChecked(true);
                                     } else {
                                         mSwitchWaitingRoom.setChecked(false);
                                     }
-                                    return Unit.INSTANCE;
                                 }, err -> {
                                     Log.e(TAG, "Error occured while getting isWaitingRoomEnabled value");
-                                    return Unit.INSTANCE;
                                 }
                         );
 

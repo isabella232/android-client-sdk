@@ -5,14 +5,15 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/viewPager"
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/inMeetingFragmentContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent">
+    </androidx.fragment.app.FragmentContainerView>
 
     <TextView
         android:id="@+id/tvClosedCaption"
@@ -25,21 +26,6 @@
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent" />
-
-    <com.google.android.material.tabs.TabLayout
-        android:id="@+id/tabLayout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:layout_marginBottom="2dp"
-        android:background="@color/transparent"
-        android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@id/control_panel_container"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:tabBackground="@drawable/tab_selector"
-        app:tabGravity="center"
-        app:tabIndicatorHeight="0dp" />
 
     <TextView
         android:id="@+id/tvProgressMsg"
@@ -65,7 +51,7 @@
         app:layout_constraintStart_toStartOf="parent" />
 
     <ImageView
-        android:id="@+id/imgUploadLogs"
+        android:id="@+id/ivUploadLogs"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginEnd="40dp"
@@ -122,58 +108,58 @@
         app:layout_constraintBottom_toBottomOf="parent">
 
         <ImageView
-            android:id="@+id/imgRoster"
+            android:id="@+id/ivRoster"
             android:layout_width="56dp"
             android:layout_height="56dp"
             android:background="@drawable/bg_circle_white_without_boarder"
             android:contentDescription="@string/people"
             android:padding="@dimen/_4dp"
             android:src="@drawable/people_icon"
-            app:layout_constraintBaseline_toBaselineOf="@+id/imgMenuOption"
-            app:layout_constraintEnd_toStartOf="@+id/imgScreenShare"
+            app:layout_constraintBaseline_toBaselineOf="@+id/ivMenuOption"
+            app:layout_constraintEnd_toStartOf="@+id/ivScreenShare"
             app:layout_constraintHorizontal_chainStyle="packed"
             app:layout_constraintStart_toStartOf="parent" />
 
         <ImageView
-            android:id="@+id/imgScreenShare"
+            android:id="@+id/ivScreenShare"
             android:layout_width="56dp"
             android:layout_height="56dp"
             android:contentDescription="@string/screen_share"
             android:src="@drawable/screen_share_state"
-            app:layout_constraintBaseline_toBaselineOf="@+id/imgRoster"
-            app:layout_constraintEnd_toStartOf="@+id/imgMenuOption"
+            app:layout_constraintBaseline_toBaselineOf="@+id/ivRoster"
+            app:layout_constraintEnd_toStartOf="@+id/ivMenuOption"
             app:layout_constraintHorizontal_chainStyle="packed"
-            app:layout_constraintStart_toEndOf="@id/imgRoster" />
+            app:layout_constraintStart_toEndOf="@id/ivRoster" />
 
         <ImageView
-            android:id="@+id/imgMenuOption"
+            android:id="@+id/ivMenuOption"
             android:layout_width="56dp"
             android:layout_height="56dp"
             android:background="@drawable/bg_circle_white_without_boarder"
             android:contentDescription="@string/more_option"
             android:padding="8dp"
             android:src="@drawable/ic_more_option"
-            app:layout_constraintBaseline_toBaselineOf="@+id/imgClose"
-            app:layout_constraintEnd_toStartOf="@+id/imgClose"
+            app:layout_constraintBaseline_toBaselineOf="@+id/ivClose"
+            app:layout_constraintEnd_toStartOf="@+id/ivClose"
             app:layout_constraintHorizontal_chainStyle="packed"
-            app:layout_constraintStart_toEndOf="@+id/imgScreenShare" />
+            app:layout_constraintStart_toEndOf="@+id/ivScreenShare" />
 
         <ImageView
-            android:id="@+id/imgClose"
+            android:id="@+id/ivClose"
             android:layout_width="56dp"
             android:layout_height="56dp"
             android:contentDescription="@string/end_meeting"
             android:src="@drawable/ic_leave_meeting"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toEndOf="@+id/imgMenuOption"
-            app:layout_constraintTop_toTopOf="@+id/imgMenuOption"
+            app:layout_constraintStart_toEndOf="@+id/ivMenuOption"
+            app:layout_constraintTop_toTopOf="@+id/ivMenuOption"
             app:layout_constraintVertical_chainStyle="packed" />
 
         <androidx.constraintlayout.helper.widget.Flow
             android:id="@+id/controller_flow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:constraint_referenced_ids="imgRoster,imgScreenShare,imgMenuOption,imgClose"
+            app:constraint_referenced_ids="ivRoster,ivScreenShare,ivMenuOption,ivClose"
             app:flow_horizontalGap="25dp"
             app:flow_horizontalStyle="packed"
             app:flow_wrapMode="chain"

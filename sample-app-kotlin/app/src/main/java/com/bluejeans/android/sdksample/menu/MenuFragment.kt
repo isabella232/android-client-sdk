@@ -13,6 +13,7 @@ import com.bluejeans.android.sdksample.SampleApplication
 import com.bluejeans.android.sdksample.databinding.FragmentOptionMenuDialogBinding
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.disposables.Disposable
 import timber.log.Timber
 
@@ -59,10 +60,10 @@ class MenuFragment(
         }
 
         disposable = SampleApplication.blueJeansSDK.meetingService.moderatorWaitingRoomService.isWaitingRoomEnabled
+            .rxObservable.observeOn(AndroidSchedulers.mainThread())
             .subscribe(
-                SampleApplication.blueJeansSDK.blueJeansClient.bjnScheduler.applyUIScheduler(),
                 {
-                    it?.let { isChecked ->
+                    it.value?.let { isChecked ->
                         menuFragmentBinding!!.swWaitingRoom.isChecked = isChecked
                     }
                 },
@@ -135,7 +136,7 @@ class MenuFragment(
             menuFragmentBinding?.swClosedCaption?.gone()
         }
 
-        if (SampleApplication.blueJeansSDK.blueJeansClient.meetingSession?.isModerator == true) {
+        if (SampleApplication.blueJeansSDK.meetingService.moderatorControlsService.isModeratorControlsAvailable.value == true) {
             menuFragmentBinding?.llWaitingRoom?.visibility = View.VISIBLE
 
             if (SampleApplication.blueJeansSDK.meetingService.moderatorWaitingRoomService.isWaitingRoomCapable.value == true) {

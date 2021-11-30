@@ -29,7 +29,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.viewpager2.widget.ViewPager2
 import com.bjnclientcore.inmeeting.contentshare.ContentShareType
 import com.bjnclientcore.ui.util.extensions.gone
 import com.bjnclientcore.ui.util.extensions.visible
@@ -40,18 +39,21 @@ import com.bluejeans.android.sdksample.menu.MenuFragment
 import com.bluejeans.android.sdksample.menu.adapter.MenuItemAdapter
 import com.bluejeans.android.sdksample.participantlist.ParticipantListFragment
 import com.bluejeans.android.sdksample.utils.AudioDeviceHelper.Companion.getAudioDeviceName
-import com.bluejeans.android.sdksample.viewpager.ScreenSlidePagerAdapter
 import com.bluejeans.bluejeanssdk.devices.AudioDevice
 import com.bluejeans.bluejeanssdk.devices.VideoDevice
 import com.bluejeans.bluejeanssdk.logging.LoggingService
-import com.bluejeans.bluejeanssdk.meeting.*
+import com.bluejeans.bluejeanssdk.meeting.ClosedCaptioningService
+import com.bluejeans.bluejeanssdk.meeting.ContentShareAvailability
+import com.bluejeans.bluejeanssdk.meeting.ContentShareEvent
+import com.bluejeans.bluejeanssdk.meeting.ContentShareState
+import com.bluejeans.bluejeanssdk.meeting.MeetingService
+import com.bluejeans.bluejeanssdk.meeting.WaitingRoomParticipantEvent
 import com.bluejeans.bluejeanssdk.permission.PermissionService
-import com.google.android.material.tabs.TabLayout
-import com.google.android.material.tabs.TabLayoutMediator
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.disposables.CompositeDisposable
 import io.reactivex.rxjava3.schedulers.Schedulers
 import timber.log.Timber
+
 
 class MainActivity : AppCompatActivity(), View.OnClickListener {
 
@@ -61,9 +63,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     private val loggingService = SampleApplication.blueJeansSDK.loggingService
     private val appVersionString = "v" + SampleApplication.blueJeansSDK.version
     private val disposable = CompositeDisposable()
-    private val joinMeetingDisposable = CompositeDisposable()
-
-    private var videoState: MeetingService.VideoState? = null
+    private val inMeetingDisposable = CompositeDisposable()
 
     private var bottomSheetFragment: MenuFragment? = null
     private var participantListFragment: ParticipantListFragment? = null
@@ -87,7 +87,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     private var isInWaitingRoom = false
     private var isWaitingRoomEnabled = false
     private var isScreenShareInProgress = false
-    private var isSubscribeToWaitingRoomEvents = false
+    private var isReconnecting = false
+    private var isCallInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,12 +106,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             Configuration.ORIENTATION_PORTRAIT -> configurePortraitView()
             else -> configureLandscapeView()
         }
-        binding.viewPager.currentItem = 0
     }
 
     override fun onResume() {
         super.onResume()
-
         if (!isScreenShareInProgress) {
             handleMeetingState(meetingService.meetingState.value)
         }
@@ -119,16 +118,16 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     override fun onDestroy() {
         Timber.tag(TAG).i("onDestroy")
         disposable.dispose()
-        joinMeetingDisposable.clear()
+        inMeetingDisposable.dispose()
         bottomSheetFragment = null
-        isSubscribeToWaitingRoomEvents = false
+        isCallInProgress = false
         super.onDestroy()
     }
 
     override fun onClick(view: View) {
         when (view.id) {
             R.id.btn_join -> checkMinimumPermissionsAndJoin()
-            R.id.imgClose -> {
+            R.id.ivClose -> {
                 meetingService.endMeeting()
                 videoDeviceService.enableSelfVideoPreview(!isVideoMuted)
                 endMeeting()
@@ -147,10 +146,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 }
                 toggleVideoMuteUnMuteView(isVideoMuted)
             }
-            R.id.imgMenuOption -> {
+            R.id.ivMenuOption -> {
                 bottomSheetFragment?.let { it.show(supportFragmentManager, it.tag) }
             }
-            R.id.imgRoster -> {
+            R.id.ivRoster -> {
                 participantListFragment?.let {
                     supportFragmentManager
                         .beginTransaction()
@@ -159,7 +158,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                         .commit()
                 }
             }
-            R.id.imgScreenShare -> {
+            R.id.ivScreenShare -> {
                 if (meetingService.contentShareService.contentShareState.value is ContentShareState.Stopped) {
                     isScreenShareInProgress = true
                     val mediaProjectionManager =
@@ -171,7 +170,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 }
             }
             R.id.ivCameraSettings -> showCameraSettingsDialog()
-            R.id.imgUploadLogs -> showUploadLogsDialog()
+            R.id.ivUploadLogs -> showUploadLogsDialog()
             R.id.btn_exit_waiting_room -> {
                 meetingService.endMeeting()
                 endMeeting()
@@ -258,21 +257,26 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     private fun activateSDKSubscriptions() {
         subscribeForMeetingStatus()
         subscribeToWaitingRoomEvents()
-        subscribeForVideoMuteStatus()
-        subscribeForAudioMuteStatus()
-        subscribeForVideoState()
-        subscribeForRemoteContentState()
-        subscribeForVideoLayout()
+        subscribeForVideoDevices()
         subscribeForAudioDevices()
         subscribeForCurrentAudioDevice()
-        subscribeForVideoDevices()
         subscribeForCurrentVideoDevice()
+    }
+
+    private fun activateInMeetingSubscriptions() {
+        subscribeForVideoMuteStatus()
+        subscribeForAudioMuteStatus()
+        subscribeForVideoLayout()
         subscribeForParticipants()
         subscribeForContentShareState()
         subscribeForContentShareAvailability()
         subscribeForContentShareEvents()
         subscribeForClosedCaptionText()
         subscribeForClosedCaptionState()
+        subscribeToActiveSpeaker()
+        subscribeForModeratorWaitingRoomEvents()
+
+        isCallInProgress = true
     }
 
     private fun checkCameraPermissionAndStartSelfVideo() {
@@ -366,8 +370,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
         Timber.tag(TAG).i("joinMeeting meetingId = $meetingId passcode = $passcode")
         showJoiningInProgressView()
-        joinMeetingDisposable.clear()
-        joinMeetingDisposable.add(
+        inMeetingDisposable.add(
             meetingService.joinMeeting(
                 MeetingService.JoinParams(meetingId, passcode, name)
             ).subscribeOn(Schedulers.single())
@@ -386,6 +389,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun endMeeting() {
         Timber.tag(TAG).i("endMeeting")
+        isReconnecting = false
         if (isInWaitingRoom) {
             isInWaitingRoom = false
             showWaitingRoomUI()
@@ -394,7 +398,9 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
 
         cameraSettingsDialog?.dismiss()
-        joinMeetingDisposable.clear()
+        inMeetingDisposable.clear()
+        isRemoteContentAvailable = false
+        isCallInProgress = false
         OnGoingMeetingService.stopService(this)
     }
 
@@ -402,7 +408,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         disposable.add(
             meetingService.meetingState.rxObservable.observeOn(AndroidSchedulers.mainThread())
                 .subscribe({
-                    Log.d(TAG, "State: $it")
+                    Log.i(TAG, "State: $it")
                     handleMeetingState(it)
                 }, {
                     Log.e(TAG, "${it.message}")
@@ -427,36 +433,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             }))
     }
 
-    private fun subscribeForVideoState() {
-        disposable.add(meetingService.videoState.subscribeOnUI(
-            { state: MeetingService.VideoState ->
-                videoState = state
-                when (videoState) {
-                    is MeetingService.VideoState.Active -> showInMeetingView()
-                    else -> handleVideoState()
-                }
-            }
-        ) {
-            Timber.tag(TAG).e("Error in video state subscription")
-        })
-    }
-
-    private fun subscribeForRemoteContentState() {
-        disposable.add(meetingService.contentShareService.receivingRemoteContent.subscribeOnUI({ isReceivingRemoteContent ->
-            if (isReceivingRemoteContent != null) {
-                isRemoteContentAvailable = isReceivingRemoteContent
-            }
-            when (isReceivingRemoteContent) {
-                true -> showInMeetingView()
-                else -> handleRemoteContentState()
-            }
-        }) {
-            Timber.tag(TAG).e("Error in remote content subscription")
-        })
-    }
-
     private fun subscribeForAudioMuteStatus() {
-        disposable.add(meetingService.audioMuted.subscribe(
+        inMeetingDisposable.add(meetingService.audioMuted.subscribe(
             { isMuted ->
                 // This could be due to local mute or remote mute
                 Timber.tag(TAG).i(" Audio Mute state $isMuted")
@@ -468,7 +446,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun subscribeForVideoMuteStatus() {
-        disposable.add(meetingService.videoMuted.subscribeOnUI(
+        inMeetingDisposable.add(meetingService.videoMuted.subscribeOnUI(
             { isMuted ->
                 // This could be due to local mute or remote mute
                 Timber.tag(TAG).i(" Video Mute state $isMuted")
@@ -480,7 +458,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun subscribeForVideoLayout() {
-        disposable.add(meetingService.videoLayout.subscribe(
+        inMeetingDisposable.add(meetingService.videoLayout.subscribe(
             { videoLayout ->
                 if (videoLayout != null) {
                     currentVideoLayout = videoLayout
@@ -538,7 +516,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun subscribeForParticipants() {
-        disposable.add(meetingService.participantsService.participants.subscribeOnUI(
+        inMeetingDisposable.add(meetingService.participantsService.participants.subscribeOnUI(
             {
                 participantListFragment?.updateMeetingList(it)
             }
@@ -548,12 +526,12 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun subscribeForContentShareAvailability() {
-        disposable.add(meetingService.contentShareService.contentShareAvailability.subscribeOnUI(
+        inMeetingDisposable.add(meetingService.contentShareService.contentShareAvailability.subscribeOnUI(
             { contentShareAvailability: ContentShareAvailability? ->
                 if (contentShareAvailability is ContentShareAvailability.Available) {
-                    binding.imgScreenShare.visible()
+                    binding.ivScreenShare.visible()
                 } else {
-                    binding.imgScreenShare.gone()
+                    binding.ivScreenShare.gone()
                 }
             }
         ) { err: Throwable ->
@@ -563,16 +541,16 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun subscribeForContentShareState() {
-        disposable.add(meetingService.contentShareService.contentShareState.subscribeOnUI(
+        inMeetingDisposable.add(meetingService.contentShareService.contentShareState.subscribeOnUI(
             { contentShareState: ContentShareState? ->
                 if (contentShareState is ContentShareState.Stopped) {
-                    binding.imgScreenShare.isSelected = false
+                    binding.ivScreenShare.isSelected = false
                     updateNotificationMessage(
                         this,
                         getString(R.string.meeting_notification_message)
                     )
                 } else {
-                    binding.imgScreenShare.isSelected = true
+                    binding.ivScreenShare.isSelected = true
                     updateNotificationMessage(
                         this,
                         getString(R.string.screen_share_notification_message)
@@ -588,7 +566,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun subscribeForContentShareEvents() {
-        disposable.add(
+        inMeetingDisposable.add(
             meetingService.contentShareService.contentShareEvent
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -608,49 +586,56 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun subscribeForModeratorWaitingRoomEvents() {
-        if (SampleApplication.blueJeansSDK.blueJeansClient.meetingSession!!.isModerator && !isSubscribeToWaitingRoomEvents) {
-            disposable.add(
-                meetingService.moderatorWaitingRoomService.isWaitingRoomEnabled
-                    .subscribe(
-                        SampleApplication.blueJeansSDK.blueJeansClient.bjnScheduler.applyUIScheduler(),
-                        {
-                            it?.let { isChecked ->
-                                isWaitingRoomEnabled = isChecked
-                                bottomSheetFragment = MenuFragment(mIOptionMenuCallback, isWaitingRoomEnabled)
+        SampleApplication.blueJeansSDK.meetingService.moderatorControlsService.isModeratorControlsAvailable.value?.let { isModerator ->
+            if (isModerator) {
+                inMeetingDisposable.add(
+                    meetingService.moderatorWaitingRoomService.isWaitingRoomEnabled.rxObservable.observeOn(AndroidSchedulers.mainThread())
+                        .subscribe(
+                            {
+                                it.value?.let { isChecked ->
+                                    isWaitingRoomEnabled = isChecked
+                                    bottomSheetFragment = MenuFragment(mIOptionMenuCallback, isWaitingRoomEnabled)
+                                }
+                            }, {
+                                Timber.tag(TAG).e(it.message)
                             }
-                        }, {
-                            Timber.tag(TAG).e(it.message)
-                        }
-                    )
-            )
+                        )
+                )
 
-            disposable.add(
-                meetingService.moderatorWaitingRoomService.waitingRoomParticipantEvents
-                    .subscribe(
-                        SampleApplication.blueJeansSDK.blueJeansClient.bjnScheduler.applyUIScheduler(),
-                        {
-                            when (it) {
-                                is WaitingRoomParticipantEvent.Added -> {
-                                    if (it.participants.size == 1) {
-                                        showToastMessage("${it.participants[0].name} has arrived in the waiting room")
-                                    } else if (it.participants.size > 1) {
-                                        showToastMessage("Multiple participants have arrived in the waiting room")
+                inMeetingDisposable.add(
+                    meetingService.moderatorWaitingRoomService.waitingRoomParticipantEvents.rxObservable.observeOn(AndroidSchedulers.mainThread())
+                        .subscribe(
+                            {
+                                Log.i(TAG, "WAITING_ROOM: WR event is $it")
+                                when (it.value) {
+                                    is WaitingRoomParticipantEvent.Added -> {
+                                        val event = it.value as WaitingRoomParticipantEvent.Added
+                                        if (event.participants.size == 1) {
+                                            Log.i(TAG, "WAITING_ROOM: ${event.participants[0].name} has arrived in the waiting room")
+                                            showToastMessage("${event.participants[0].name} has arrived in the waiting room")
+                                        } else if (event.participants.size > 1) {
+                                            Log.i(TAG, "WAITING_ROOM:  ${getString(R.string.multiple_participants_arrived_wr)}")
+                                            showToastMessage(getString(R.string.multiple_participants_arrived_wr))
+                                        }
                                     }
-                                }
-                                is WaitingRoomParticipantEvent.Removed -> {
-                                    if (it.participants.size == 1) {
-                                        showToastMessage("${it.participants[0].name} has left the waiting room")
-                                    } else if (it.participants.size > 1) {
-                                        showToastMessage("Multiple participants have left the waiting room")
+                                    is WaitingRoomParticipantEvent.Removed -> {
+                                        val event = it.value as WaitingRoomParticipantEvent.Removed
+                                        if (event.participants.size == 1) {
+                                            Log.i(TAG, "WAITING_ROOM: ${event.participants[0].name} has left the waiting room")
+                                            showToastMessage("${event.participants[0].name} has left the waiting room")
+                                        } else if (event.participants.size > 1) {
+                                            Log.i(TAG, "WAITING_ROOM: ${getString(R.string.multiple_participants_left_wr)}")
+                                            showToastMessage(getString(R.string.multiple_participants_left_wr))
+                                        }
                                     }
+                                    else -> Timber.tag(TAG).i("Unrecognized event")
                                 }
-                                else -> Timber.tag(TAG).i("Unrecognized event")
+                            }, {
+                                Log.e(TAG, "${it.message}")
                             }
-                        }, {
-                            Timber.tag(TAG).e(it.message)
-                        }
-                    )
-            )
+                        )
+                )
+            }
         }
     }
 
@@ -671,7 +656,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun subscribeForClosedCaptionText() {
-        disposable.add(meetingService.closedCaptioningService.closedCaptionText.subscribeOn(Schedulers.io())
+        inMeetingDisposable.add(meetingService.closedCaptioningService.closedCaptionText.subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({
                 binding.tvClosedCaption.text = it
@@ -681,7 +666,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun subscribeForClosedCaptionState() {
-        disposable.add(
+        inMeetingDisposable.add(
             meetingService.closedCaptioningService.closedCaptioningState
                 .subscribeOnUI({
                     if (it == ClosedCaptioningService.ClosedCaptioningState.Started) {
@@ -695,34 +680,36 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         )
     }
 
-    private fun initViews() {
-        val pagerAdapter = ScreenSlidePagerAdapter(this)
-        binding.viewPager.adapter = pagerAdapter
-        binding.viewPager.registerOnPageChangeCallback(PagerChangeCallback())
-        // we are caching the fragment as when user change layout
-        // if not cached, fragment dimensions are returned null resulting in no layout being displayed
-        // user can also use detatch and attach fragments on page listener inorder to relayout.
-        binding.viewPager.offscreenPageLimit = 1
-        TabLayoutMediator(
-            binding.tabLayout,
-            binding.viewPager
-        ) { _: TabLayout.Tab?, _: Int -> }.attach()
+    private fun subscribeToActiveSpeaker() {
+        inMeetingDisposable.add(
+            meetingService.participantsService.activeSpeaker.rxObservable.observeOn(AndroidSchedulers.mainThread())
+                .subscribe({
+                    it.value?.let { participant ->
+                        Log.i("ActiveSpeaker", "${participant.name} is the active speaker")
+                    } ?: kotlin.run {
+                        Log.e("ActiveSpeaker", "Participant information is missing")
+                    }
+                }, {
+                    Log.e(TAG, "Exception while subscribing to active speaker: ${it.message}")
+                })
+        )
+    }
 
+    private fun initViews() {
         val btnJoin = findViewById<Button>(R.id.btn_join)
         btnJoin.setOnClickListener(this)
 
         val btnExitWaitingRoom = findViewById<Button>(R.id.btn_exit_waiting_room)
         btnExitWaitingRoom.setOnClickListener(this)
 
-        binding.imgClose.setOnClickListener(this)
+        binding.ivClose.setOnClickListener(this)
         binding.selfView.ivMic.setOnClickListener(this)
         binding.selfView.ivVideo.setOnClickListener(this)
         binding.selfView.ivCameraSettings.setOnClickListener(this)
-        binding.imgMenuOption.setOnClickListener(this)
-        binding.imgRoster.setOnClickListener(this)
-        binding.imgScreenShare.setOnClickListener(this)
-        binding.imgUploadLogs.setOnClickListener(this)
-
+        binding.ivMenuOption.setOnClickListener(this)
+        binding.ivRoster.setOnClickListener(this)
+        binding.ivScreenShare.setOnClickListener(this)
+        binding.ivUploadLogs.setOnClickListener(this)
 
         bottomSheetFragment = MenuFragment(mIOptionMenuCallback, isWaitingRoomEnabled)
         participantListFragment = ParticipantListFragment()
@@ -732,16 +719,36 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         binding.tvAppVersion.text = appVersionString
     }
 
+    private fun showInMeetingFragment() {
+        if (supportFragmentManager.findFragmentById(R.id.inMeetingFragmentContainer) == null) {
+            val inMeetingFragment = InMeetingFragment()
+            supportFragmentManager.beginTransaction()
+                .replace(
+                    R.id.inMeetingFragmentContainer,
+                    inMeetingFragment
+                ).commit()
+        }
+    }
+
+    private fun removeInMeetingFragment() {
+        val inMeetingFragment = supportFragmentManager.findFragmentById(R.id.inMeetingFragmentContainer)
+        inMeetingFragment?.let {
+            supportFragmentManager.beginTransaction()
+                .remove(it)
+                .commit()
+        }
+    }
+
     private fun showJoiningInProgressView() {
         Timber.tag(TAG).i("showJoiningInProgressView")
         binding.tvAppVersion.gone()
         binding.joinInfo.joinInfo.gone()
         binding.tvProgressMsg.visible()
         binding.tvProgressMsg.text = getString(R.string.connectingState)
-        binding.imgClose.visible()
-        binding.imgMenuOption.visible()
+        binding.ivClose.visible()
+        binding.ivMenuOption.visible()
         binding.controlPanelContainer.setBackgroundResource(R.drawable.meeting_controls_panel_bg)
-        binding.imgUploadLogs.gone()
+        binding.ivUploadLogs.gone()
     }
 
     private fun showInMeetingView() {
@@ -753,30 +760,27 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         binding.tvAppVersion.gone()
         binding.tvProgressMsg.gone()
         binding.joinInfo.joinInfo.gone()
-        binding.viewPager.visible()
-        binding.tabLayout.visible()
-        binding.imgClose.visible()
-        binding.imgMenuOption.visible()
-        binding.imgRoster.visible()
+        binding.inMeetingFragmentContainer.visible()
+        binding.ivClose.visible()
+        binding.ivMenuOption.visible()
+        binding.ivRoster.visible()
         binding.controlPanelContainer.setBackgroundResource(R.drawable.meeting_controls_panel_bg)
-        binding.imgUploadLogs.gone()
+        binding.ivUploadLogs.gone()
         binding.tvClosedCaption.visible()
     }
 
     private fun showOutOfMeetingView() {
         Timber.tag(TAG).i("showOutOfMeetingView")
         binding.tvAppVersion.visible()
-        binding.viewPager.gone()
-        binding.viewPager.currentItem = 0
-        binding.tabLayout.gone()
+        binding.inMeetingFragmentContainer.gone()
         binding.tvProgressMsg.gone()
-        binding.imgClose.gone()
-        binding.imgMenuOption.gone()
+        binding.ivClose.gone()
+        binding.ivMenuOption.gone()
         binding.joinInfo.joinInfo.visible()
-        binding.imgRoster.gone()
-        binding.imgScreenShare.gone()
+        binding.ivRoster.gone()
+        binding.ivScreenShare.gone()
         binding.controlPanelContainer.setBackgroundResource(0)
-        binding.imgUploadLogs.visible()
+        binding.ivUploadLogs.visible()
         binding.tvClosedCaption.gone()
         binding.tvClosedCaption.text = null
         if (bottomSheetFragment?.isAdded == true) with(bottomSheetFragment) { this?.dismiss() }
@@ -791,11 +795,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         if (audioDeviceDialog?.isShowing == true) audioDeviceDialog?.dismiss()
         if (videoDeviceDialog?.isShowing == true) videoDeviceDialog?.dismiss()
         if (videoLayoutDialog?.isShowing == true) videoLayoutDialog?.dismiss()
-    }
-
-    private fun showProgress(msg: String) {
-        binding.tvProgressMsg.visible()
-        binding.tvProgressMsg.text = msg
     }
 
     private fun hideProgress() {
@@ -852,51 +851,37 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         binding.selfView.selfView.requestLayout()
     }
 
-    private fun handleRemoteContentState() {
-        if (binding.viewPager.visibility == View.VISIBLE) {
-            when {
-                isRemoteContentAvailable -> hideProgress()
-                else -> showProgress("No one is sharing the remote content.")
-            }
-        }
-    }
-
-    private fun handleVideoState() {
-        Timber.tag(TAG).i("handleVideoState videoState = $videoState")
-        if (binding.viewPager.visibility == View.VISIBLE) {
-            when (videoState) {
-                is MeetingService.VideoState.Active -> hideProgress()
-                is MeetingService.VideoState.Inactive.SingleParticipant ->
-                    showProgress("You are the only participant. Please wait some one to join.")
-                is MeetingService.VideoState.Inactive.NoOneHasVideo ->
-                    showProgress("No one is sharing their video")
-                is MeetingService.VideoState.Inactive.NeedsModerator ->
-                    showProgress("Need moderator")
-                else -> hideProgress()
-            }
-        }
-    }
-
     private fun handleMeetingState(state: MeetingService.MeetingState) {
         when (state) {
             is MeetingService.MeetingState.Connected -> {
                 // add this flag to avoid screen shots.
                 // This also allows protection of screen during screen casts from 3rd party apps.
                 window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                OnGoingMeetingService.startService(this)
-                subscribeForModeratorWaitingRoomEvents()
-                isSubscribeToWaitingRoomEvents = true
+                if (!isCallInProgress) {
+                    OnGoingMeetingService.startService(this)
+                    activateInMeetingSubscriptions()
+                }
+                showInMeetingFragment()
+                hideProgress()
+                if (isReconnecting) {
+                    isReconnecting = false
+                    showToastMessage(getString(R.string.reconnected))
+                }
             }
             is MeetingService.MeetingState.Idle -> {
                 endMeeting()
+                removeInMeetingFragment()
                 isInWaitingRoom = false
                 showWaitingRoomUI()
                 window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             }
             is MeetingService.MeetingState.WaitingRoom -> {
                 Timber.tag(TAG).i("Moving to WR")
+                removeInMeetingFragment()
+                inMeetingDisposable.clear()
                 showOutOfMeetingView()
                 isInWaitingRoom = true
+                isCallInProgress = false
                 showWaitingRoomUI()
             }
             is MeetingService.MeetingState.Connecting -> {
@@ -910,17 +895,11 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 binding.tvProgressMsg.visibility = View.VISIBLE
                 binding.tvProgressMsg.text = "Connecting..."
             }
-            else -> Log.i(TAG, "Unknown meeting state: $state")
-        }
-    }
-
-    private inner class PagerChangeCallback : ViewPager2.OnPageChangeCallback() {
-        override fun onPageSelected(position: Int) {
-            super.onPageSelected(position)
-            when (position) {
-                0 -> handleVideoState()
-                1 -> handleRemoteContentState()
+            is MeetingService.MeetingState.Reconnecting -> {
+                isReconnecting = true
+                showToastMessage(getString(R.string.reconnecting))
             }
+            else -> Log.i(TAG, "Unknown meeting state: $state")
         }
     }
 
@@ -993,7 +972,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             WaitingRoomDialog.newInstance(waitingRoomParticipants, meetingService)
                 .show(supportFragmentManager, WaitingRoomDialog.TAG)
         } else {
-            showToastMessage("There are no participants in waiting room")
+            showToastMessage(getString(R.string.no_wr_participants))
         }
     }
 
@@ -1179,14 +1158,16 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         if (isInWaitingRoom) {
             binding.joinInfo.joinInfo.visibility = View.GONE
             binding.waitingRoomLayout.clWaitingRoom.visibility = View.VISIBLE
+
+            meetingService.meetingInformation.value?.meetingTitle?.let {
+                binding.waitingRoomLayout.tvWaitingRoom.text = it
+            }
         } else {
             binding.joinInfo.joinInfo.visibility = View.VISIBLE
             binding.waitingRoomLayout.clWaitingRoom.visibility = View.GONE
         }
         hideProgress()
     }
-
-
 
     companion object {
         const val TAG = "MainActivity"
