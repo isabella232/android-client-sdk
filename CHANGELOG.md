@@ -108,3 +108,11 @@ Features / Changes:
 - Added information of being a moderator or not with the Participant object
 - Meeting ID and Participant Passcode properties with meeting information
 - Misc bug fixes
+
+Version 1.3.1 *(11-2021)*
+---------------------------------
+Features / Changes:
+- Active speaker
+- Mute incoming audio
+- Remote mute and Local mute information
+- Misc bug fixes
