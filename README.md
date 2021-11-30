@@ -10,7 +10,7 @@ With BlueJeans Android Client SDK, participants can join video conference meetin
 - Audio and Video Permission handling
 - Join, End Meeting
 - Self Video
-- Remote Video, Remote Video states
+- Remote Audio, Remote Video states
 - Content receive 
 - Audio and Video self mute
 - Orientation handling
@@ -26,7 +26,7 @@ With BlueJeans Android Client SDK, participants can join video conference meetin
 - Enable torch/flash unit on a device
 - Set capture requests such as zoom, exposure on the active video device
 - Public and Private meeting Chat
-- Remote Video and Content mute
+- Incoming Audio, Video and Content mute
 - Meeting Information (Title, Hostname, URL) property
 - 720p video capture (Experimental API)
 - Moderator Controls 
@@ -35,11 +35,14 @@ With BlueJeans Android Client SDK, participants can join video conference meetin
   - Remove a participant from the meeting
   - End meeting for all immediately or after a certain delay
 - Audio capture dumps (debug facility)
-
-## New Features :
 - Waiting room
 
-## Current Version : 1.3.0
+## New Features :
+- Active Speaker
+- Incoming Audio mute
+- Remote and Local mute information
+
+## Current Version : 1.3.1
 
 ## Pre-requisites :
 - **Android API level :** Min level 26
@@ -123,11 +126,10 @@ When inactive, APIs of the services do not react and the subscriptions will yiel
 
 **_Globally active services_** -> MeetingService, VideoDeviceService, LoggingService and PermissionService.
 
-**_InMeeting active services_** -> ContentShareService, AudioDeviceService, ModeratorControlsService, PublicChatService, PrivateChatService, ParticipantsService
-and ClosedCaptioningService
+**_InMeeting active services_** -> ContentShareService, AudioDeviceService, ModeratorControlsService, PublicChatService, PrivateChatService, ParticipantsService, ModeratorWaitingRoomService and ClosedCaptioningService
 
-InMeeting services get activated when _MeetingState_ transitions from _MeetingState.Validating_ to _MeetingState.Connecting_ and get inactivated
-when the meeting ends by the transition of meeting state to _MeetingState.Disconnected_
+InMeeting services are operational when _MeetingState_ transitions from _MeetingState.Connecting_ to _MeetingState.Connected_ and get inactivated
+when the meeting ends by the transition of meeting state to _MeetingState.Idle_.
 
 PermissionService : Provides for permission handling related APIs (refer to documentation for API set and details)
 
@@ -310,7 +312,7 @@ Note that
 - when in a meeting (meeting state is MeetingState.Connected) and if `setVideoMuted` is called with true, `enableSelfVideoPreview` is called with true,
 then the self video preview gets activated but the stream does not flow to the other endpoint.
 
-#### Mute/Unmute Remote Video :
+#### Mute/Unmute Incoming Video :
 The BluejeansSDK MeetingService provides API to mute, unmute remote participants video. This is helpful in the scenarios where the user does not intend to view remote video.
 Some example use cases can be
 - App has a view pager with the first page showing remote video and the second page showing content. When a user is on the content page, this API can be used to mute remote video.
@@ -320,6 +322,15 @@ Some example use cases can be
 
 ##### API:
 `meetingService.setRemoteVideoMuted(muted: Boolean)`
+
+#### Mute/Unmute Incoming Audio :
+The BluejeansSDK MeetingService provides API to mute, unmute remote audio. This is helpful in the scenarios where the user does not intend to hear incoming audio from remote participants.
+Some example use cases can be
+- Pause BlueJeans meeting to facilitate a concurrent VOIP call.
+- Content Only mode where Audio and Video are disabled
+
+##### API:
+`meetingService.setRemoteAudioMuted(muted: Boolean)`
 
 #### Mute/Unmute Content :
 The BluejeansSDK MeetingService provides API to mute, unmute content. This is helpful in the scenarios where the user does not intend to view content.
@@ -378,6 +389,10 @@ blueJeansSDK.getMeetingService().getParticipantsService()
 *participants* provides for a list of meeting participants. The list will be published on any change in the number of meeting participants or the change in properties of any of the current participants. Any change will reflect in the content of the list and the list reference remains the same throughout the meeting instance.
 
 *selfParticipant* represents self. Provides for any changes in properties of the self.
+
+*activeSpeaker* represents the current actively speaking participant. Some of the use cases are:
+- Display active speaker whenever video is hidden, mainly in content only / low bandwidth mode
+- Keep track of participants who have spoken in a meeting
 
 ### Content Share Feature:
 
