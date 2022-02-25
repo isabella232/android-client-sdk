@@ -47,4 +47,5 @@
     <string name="multiple_participants_left_wr">Multiple participants have left the waiting room</string>
     <string name="reconnecting">Reconnecting...</string>
     <string name="reconnected">Reconnected</string>
+    <string name="meeting_in_progress">A meeting is already in progress.</string>
 </resources>
