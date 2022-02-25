@@ -584,5 +584,8 @@ The BlueJeans Android Client SDK is closed source and proprietary. As a result, 
 ## License : 
 Copyright © 2021 BlueJeans Network. All usage of the SDK is subject to the Developer Agreement that can be found [here](LICENSE). Download the agreement and send an email to api-sdk@bluejeans.com with a signed version of this agreement, before any commercial or public facing usage of this SDK.
 
+## 3<sup>rd</sup> party licenses :
+Android Client SDK uses several open-source libraries. The document listing all the third-party libraries can be found [here](LICENSE-3RD-PARTY.txt).
+
 ## Legal Requirements :
 Use of this SDK is subject to our [Terms & Conditions](https://www.bluejeans.com/terms-and-conditions-may-2020) and [Privacy Policy](https://www.bluejeans.com/privacy-policy). 
