@@ -126,7 +126,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     override fun onClick(view: View) {
         when (view.id) {
-            R.id.btn_join -> checkMinimumPermissionsAndJoin()
+            R.id.btn_join -> {
+                if (meetingService.meetingState.value == MeetingService.MeetingState.Idle) {
+                    checkMinimumPermissionsAndJoin()
+                } else {
+                    showToastMessage(getString(R.string.meeting_in_progress))
+                }
+            }
             R.id.ivClose -> {
                 meetingService.endMeeting()
                 videoDeviceService.enableSelfVideoPreview(!isVideoMuted)
@@ -682,12 +688,14 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun subscribeToActiveSpeaker() {
         inMeetingDisposable.add(
-            meetingService.participantsService.activeSpeaker.rxObservable.observeOn(AndroidSchedulers.mainThread())
+            meetingService.participantsService.activeSpeaker.rxObservable.observeOn(
+                AndroidSchedulers.mainThread()
+            )
                 .subscribe({
                     it.value?.let { participant ->
-                        Log.i("ActiveSpeaker", "${participant.name} is the active speaker")
+                        Log.i(TAG, "${participant.name} is the active speaker")
                     } ?: kotlin.run {
-                        Log.e("ActiveSpeaker", "Participant information is missing")
+                        Log.e(TAG, "Participant information is missing")
                     }
                 }, {
                     Log.e(TAG, "Exception while subscribing to active speaker: ${it.message}")
@@ -968,9 +976,11 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun showWaitingRoomDialog() {
         val waitingRoomParticipants = meetingService.moderatorWaitingRoomService.waitingRoomParticipants
-        if (!waitingRoomParticipants.isNullOrEmpty()) {
-            WaitingRoomDialog.newInstance(waitingRoomParticipants, meetingService)
-                .show(supportFragmentManager, WaitingRoomDialog.TAG)
+        if (!waitingRoomParticipants.value.isNullOrEmpty()) {
+            waitingRoomParticipants.value?.let {
+                WaitingRoomDialog.newInstance(it, meetingService)
+                    .show(supportFragmentManager, WaitingRoomDialog.TAG)
+            }
         } else {
             showToastMessage(getString(R.string.no_wr_participants))
         }
