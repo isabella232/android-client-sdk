@@ -158,7 +158,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.btnJoin:
-                checkMinimumPermissionsAndJoin();
+                if (mMeetingService.getMeetingState().getValue() instanceof MeetingService.MeetingState.Idle) {
+                    checkMinimumPermissionsAndJoin();
+                } else {
+                    showToastMessage(getString(R.string.meeting_in_progress));
+                }
                 break;
             case R.id.imgClose:
                 mMeetingService.endMeeting();
@@ -663,11 +667,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void subscribeToActiveSpeaker() {
         mInMeetingDisposable.add(mMeetingService.getParticipantsService().getActiveSpeaker().getRxObservable().observeOn(AndroidSchedulers.mainThread())
-                .subscribe(participant ->{
+                .subscribe(participant -> {
                     if (participant.getValue() != null) {
-                        Log.i("ActiveSpeaker", participant.getValue().getName() + " is the active speaker.");
+                        Log.i(TAG, participant.getValue().getName() + " is the active speaker.");
                     } else {
-                        Log.e("ActiveSpeaker", "Participant information is missing");
+                        Log.e(TAG, "Participant information is missing");
                     }
                 }, err-> {
                     Log.e(TAG, "Exception while subscribing to active speaker: " + err.getMessage());
@@ -980,7 +984,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void showWaitingRoomDialog() {
-        List<ParticipantsService.Participant> waitingRoomParticipants = mMeetingService.getModeratorWaitingRoomService().getWaitingRoomParticipants();
+        List<ParticipantsService.Participant> waitingRoomParticipants = mMeetingService.getModeratorWaitingRoomService().getWaitingRoomParticipants().getValue();
         if (waitingRoomParticipants != null && waitingRoomParticipants.size() > 0) {
             WaitingRoomDialog.newInstance(waitingRoomParticipants, mMeetingService)
                     .show(getSupportFragmentManager(), "WaitingRoomDialog");
