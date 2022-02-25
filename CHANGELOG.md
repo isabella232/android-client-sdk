@@ -116,3 +116,11 @@ Features / Changes:
 - Mute incoming audio
 - Remote mute and Local mute information
 - Misc bug fixes
+
+Version 1.3.2 *(02-2022)*
+---------------------------------
+Features / Changes:
+- Enhanced participant mute states to reflect whether mute was triggered locally or remotely
+- Migration from JCenter to Maven Central for internal 3rd party dependencies
+- Misc bug fixes
+
