@@ -36,13 +36,10 @@ With BlueJeans Android Client SDK, participants can join video conference meetin
   - End meeting for all immediately or after a certain delay
 - Audio capture dumps (debug facility)
 - Waiting room
-
-## New Features :
 - Active Speaker
-- Incoming Audio mute
 - Remote and Local mute information
 
-## Current Version : 1.3.1
+## Current Version : 1.3.2
 
 ## Pre-requisites :
 - **Android API level :** Min level 26
@@ -102,7 +99,7 @@ repositories { maven { url "https://swdl.bluejeans.com/bjnvideosdk/android" } }
 
 In app's build.gradle
 ```xml
-implementation "com.bluejeans:android-client-sdk:1.3.0"
+implementation "com.bluejeans:android-client-sdk:1.3.2"
 ```
 
 ### Upgrade Instructions :
@@ -384,7 +381,7 @@ Use *selectAudioDevice* and choose the audio device of your choice from the avai
 blueJeansSDK.getMeetingService().getParticipantsService()
 ```
 
-*participant* represents a meeting participant. Carries properties video mute state, audio mute state, is self, name and a unique identifier of the participant.
+*participant* represents a meeting participant. Carries properties to identify whether video and audio is muted or not, MuteState to differentiate if is locally or remotely muted for both audio and video, is self, name and an unique identifier of the participant.
 
 *participants* provides for a list of meeting participants. The list will be published on any change in the number of meeting participants or the change in properties of any of the current participants. Any change will reflect in the content of the list and the list reference remains the same throughout the meeting instance.
 
